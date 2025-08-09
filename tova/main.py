@@ -79,6 +79,8 @@ async def websocket_chat(websocket: WebSocket):
             message = data.get("message", "")
             context = data.get("context", {})
             
+            logger.info(f"🔍 Received message: {message}")
+            
             if not message.strip():
                 continue
             
@@ -87,39 +89,61 @@ async def websocket_chat(websocket: WebSocket):
                 "type": "typing",
                 "status": "started"
             })
+            logger.info("🔍 Sent typing indicator")
             
             # Process message through orchestrator with persistence
             response_chunks = []
-            async for chunk_data in orchestrator.process_user_message_with_persistence(
-                conversation_id=conversation_id,
-                message=message,
-                user_context=context
-            ):
-                if isinstance(chunk_data, dict):
-                    content = chunk_data.get("content", "")
-                    metadata = chunk_data.get("metadata", {})
-                    if content:
-                        response_chunks.append(content)
-                        # Stream each chunk to client
-                        await websocket.send_json({
-                            "type": "response_chunk",
-                            "content": content,
-                            "metadata": metadata
-                        })
-                else:
-                    if chunk_data:
-                        response_chunks.append(chunk_data)
-                        await websocket.send_json({
-                            "type": "response_chunk",
-                            "content": chunk_data
-                        })
+            logger.info("🔍 Starting message processing...")
+            
+            try:
+                async for chunk_data in orchestrator.process_user_message_with_persistence(
+                    conversation_id=conversation_id,
+                    message=message,
+                    user_context=context
+                ):
+                    logger.info(f"🔍 Got chunk_data: {chunk_data}")
+                    if isinstance(chunk_data, dict):
+                        content = chunk_data.get("content", "")
+                        metadata = chunk_data.get("metadata", {})
+                        if content:
+                            response_chunks.append(content)
+                            # Stream each chunk to client
+                            await websocket.send_json({
+                                "type": "response_chunk",
+                                "content": content,
+                                "metadata": metadata
+                            })
+                            logger.info(f"🔍 Sent chunk to client: {content[:50]}...")
+                    else:
+                        if chunk_data:
+                            response_chunks.append(chunk_data)
+                            await websocket.send_json({
+                                "type": "response_chunk",
+                                "content": chunk_data
+                            })
+                            logger.info(f"🔍 Sent chunk to client: {chunk_data[:50]}...")
+                
+                logger.info(f"🔍 Finished processing, got {len(response_chunks)} chunks")
+                
+            except Exception as e:
+                logger.error(f"🔍 Error during message processing: {e}")
+                import traceback
+                logger.error(f"🔍 Traceback: {traceback.format_exc()}")
+                
+                await websocket.send_json({
+                    "type": "error",
+                    "message": str(e)
+                })
+                continue
             
             # Send completion signal
+            full_response = "".join(response_chunks)
             await websocket.send_json({
                 "type": "response_complete",
-                "full_response": "".join(response_chunks),
+                "full_response": full_response,
                 "conversation_id": conversation_id
             })
+            logger.info(f"🔍 Sent completion signal with response: {full_response[:50]}...")
             
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)

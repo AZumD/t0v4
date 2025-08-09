@@ -75,12 +75,17 @@ class TovaOrchestrator:
     ) -> AsyncGenerator[str, None]:
         """Process user message through dual-brain system"""
         
+        self.logger.info(f"🔍 Orchestrator: Processing message: {message[:50]}...")
+        
         # Check if brains are available
         mixtral_ok = await self.mixtral.health_check()
         phi_ok = await self.phi.health_check()
         
+        self.logger.info(f"🔍 Orchestrator: Brain status - Mixtral: {mixtral_ok}, Phi: {phi_ok}")
+        
         if not mixtral_ok and not phi_ok:
             # Both brains offline - provide fallback response
+            self.logger.info("🔍 Orchestrator: Both brains offline, using fallback response")
             fallback_response = self._generate_fallback_response(message)
             yield fallback_response
             return
@@ -88,34 +93,44 @@ class TovaOrchestrator:
         # 1. Background analysis with Phi (async) - only if available
         phi_task = None
         if phi_ok:
+            self.logger.info("🔍 Orchestrator: Starting Phi background analysis")
             phi_task = asyncio.create_task(
                 self._background_analysis(message, user_context)
             )
         
         # 2. Build dynamic prompt
+        self.logger.info("🔍 Orchestrator: Building dynamic prompt")
         prompt = await self.prompt_stitcher.build_prompt(
             message=message,
             mood=self.current_mood,
             function=self.active_function,
             context=user_context
         )
+        self.logger.info(f"🔍 Orchestrator: Built prompt: {prompt[:100]}...")
         
         # 3. Generate response with Mixtral (streaming) - only if available
         if mixtral_ok:
+            self.logger.info("🔍 Orchestrator: Starting Mixtral response generation")
             async for chunk in self.mixtral.generate_response(prompt):
+                self.logger.info(f"🔍 Orchestrator: Got chunk from Mixtral: {chunk[:50]}...")
                 yield chunk
         else:
             # Mixtral offline - provide fallback response
+            self.logger.info("🔍 Orchestrator: Mixtral offline, using fallback response")
             fallback_response = self._generate_fallback_response(message)
             yield fallback_response
         
         # 4. Wait for Phi analysis to complete (if it was started)
         if phi_task:
             try:
+                self.logger.info("🔍 Orchestrator: Waiting for Phi analysis to complete")
                 analysis = await phi_task
                 await self._process_background_analysis(analysis)
+                self.logger.info("🔍 Orchestrator: Phi analysis completed")
             except Exception as e:
-                self.logger.warning(f"Phi analysis failed: {e}")
+                self.logger.warning(f"🔍 Orchestrator: Phi analysis failed: {e}")
+        
+        self.logger.info("🔍 Orchestrator: Message processing completed")
     
     async def process_user_message_with_persistence(
         self,
