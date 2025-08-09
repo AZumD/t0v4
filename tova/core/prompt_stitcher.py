@@ -1,7 +1,7 @@
 """Dynamic prompt assembly system"""
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 import logging
 
 
@@ -59,34 +59,53 @@ class PromptStitcher:
         mood: Optional[str] = None,
         function: Optional[str] = None,
         context: Optional[Dict] = None
-    ) -> str:
-        """Build complete prompt from components"""
+    ) -> Tuple[str, str]:
+        """Build complete prompt from components, returns (system_prompt, user_message)"""
         
         # Start with core personality
-        prompt_parts = [self.core_personality.get("prompt", "You are TOVA, a helpful AI assistant.")]
+        system_parts = [self.core_personality.get("prompt", "You are TOVA, a helpful AI assistant.")]
         
         # Add mood layer
         if mood and mood in self.moods:
             mood_prompt = self.moods[mood].get("prompt_addition", "")
             if mood_prompt:
-                prompt_parts.append(f"\n{mood_prompt}")
+                system_parts.append(f"\n{mood_prompt}")
         
         # Add function layer  
         if function and function in self.functions:
             func_prompt = self.functions[function].get("prompt_addition", "")
             if func_prompt:
-                prompt_parts.append(f"\n{func_prompt}")
+                system_parts.append(f"\n{func_prompt}")
+        
+        # Build system prompt
+        system_prompt = "".join(system_parts)
+        
+        # Build user message with context if available
+        user_parts = []
         
         # Add context if available
         if context:
             context_str = self._format_context(context)
             if context_str:
-                prompt_parts.append(f"\nRelevant Context:\n{context_str}")
+                user_parts.append(f"Relevant Context:\n{context_str}\n\n")
         
         # Add the actual user message
-        prompt_parts.append(f"\nUser: {message}\nTova:")
+        user_parts.append(message)
         
-        return "".join(prompt_parts)
+        user_message = "".join(user_parts)
+        
+        return system_prompt, user_message
+    
+    async def build_prompt_legacy(
+        self,
+        message: str,
+        mood: Optional[str] = None,
+        function: Optional[str] = None,
+        context: Optional[Dict] = None
+    ) -> str:
+        """Legacy method for backward compatibility - builds single prompt string"""
+        system_prompt, user_message = await self.build_prompt(message, mood, function, context)
+        return f"{system_prompt}\n\nUser: {user_message}\nTova:"
     
     def _format_context(self, context: Dict) -> str:
         """Format context dictionary into readable string"""

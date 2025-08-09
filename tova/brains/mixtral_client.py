@@ -11,6 +11,13 @@ class MixtralClient(BaseBrainClient):
         self.model_name = "mixtral"
         self.logger = logging.getLogger(__name__)
     
+    def _format_prompt_chatml(self, prompt: str, system_prompt: str = None) -> str:
+        """Format prompt using ChatML format for Dolphin Mixtral"""
+        if system_prompt:
+            return f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant"
+        else:
+            return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant"
+    
     async def generate_response(
         self, 
         prompt: str, 
@@ -18,17 +25,21 @@ class MixtralClient(BaseBrainClient):
         max_tokens: int = 1000,
         top_p: float = 0.9,
         stream: bool = True,
+        system_prompt: str = None,
         **kwargs
     ) -> AsyncGenerator[str, None]:
         """Generate streaming response from Mixtral"""
         
+        # Format prompt using ChatML for Dolphin Mixtral
+        formatted_prompt = self._format_prompt_chatml(prompt, system_prompt)
+        
         payload = {
-            "prompt": prompt,
+            "prompt": formatted_prompt,
+            "n_predict": max_tokens,  # Use n_predict instead of max_tokens for llama.cpp
             "temperature": temperature,
-            "max_tokens": max_tokens,
             "top_p": top_p,
             "stream": stream,
-            "stop": ["Human:", "User:", "\n\nHuman:", "\n\nUser:"]
+            "stop": ["<|im_end|>", "<|im_start|>", "Human:", "User:", "\n\nHuman:", "\n\nUser:"]
         }
         
         try:
