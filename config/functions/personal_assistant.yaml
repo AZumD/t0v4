@@ -1,0 +1,6 @@
+# Personal assistant function manifest
+name: personal_assistant
+description: "Handles scheduling, reminders, and simple information retrieval"
+parameters:
+  date_format: "%Y-%m-%d"
+  timezone: UTC 

@@ -1,0 +1,13 @@
+[project]
+name = "tova-v4"
+version = "0.1.0"
+description = "TOVA v4 dual-brain AI companion"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+profile = "black" 

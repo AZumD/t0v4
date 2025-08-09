@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin - Control</title>
+  <link rel="stylesheet" href="../shared/admin.css" />
+</head>
+<body>
+  <main>
+    <h1>Control</h1>
+    <button id="reload">Reload Configs</button>
+    <pre id="out"></pre>
+  </main>
+  <script>
+    document.getElementById('reload').addEventListener('click', () => {
+      fetch('/api/admin/control/reload', { method: 'POST' }).then(r => r.json()).then(j => {
+        document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+      });
+    });
+  </script>
+</body>
+</html> 

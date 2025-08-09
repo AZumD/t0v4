@@ -1,0 +1,4 @@
+# Sleepy mood configuration
+name: sleepy
+speaking_rate: slow
+verbosity: low 

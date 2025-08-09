@@ -1,0 +1,6 @@
+# Restaurant assistant function manifest
+name: restaurant_assistant
+description: "Helps users find and book restaurants"
+parameters:
+  default_city: ""
+  cuisine_preferences: [] 
