@@ -170,11 +170,14 @@ class TovaInterface {
             };
 
             this.ws.onmessage = (event) => {
+                console.log('🔍 RAW WebSocket message received:', event.data);
                 try {
                     const data = JSON.parse(event.data);
+                    console.log('🔍 PARSED WebSocket data:', data);
                     this.handleMessage(data);
                 } catch (e) {
                     console.error('Failed to parse message:', e);
+                    console.error('Raw data was:', event.data);
                 }
             };
 
@@ -227,19 +230,25 @@ class TovaInterface {
         
         if (!message || !this.isConnected) return;
 
+        console.log('🔍 Sending message:', message);
         this.addMessage('user', message);
         
         // Send to TOVA v4 backend
-        this.ws.send(JSON.stringify({
+        const messageData = {
             message: message,
             context: {} // Additional context can be added here
-        }));
+        };
+        console.log('🔍 Sending WebSocket data:', messageData);
+        this.ws.send(JSON.stringify(messageData));
 
         input.value = '';
     }
 
     handleMessage(data) {
+        console.log('🔍 HandleMessage called with:', data);
+        
         if (data.error) {
+            console.log('🔍 Error message:', data.error);
             this.addMessage('system', `Error: ${data.error}`);
             return;
         }
@@ -247,22 +256,25 @@ class TovaInterface {
         // Handle different message types from TOVA v4
         switch (data.type) {
             case 'typing':
+                console.log('🔍 Typing indicator:', data.status);
                 if (data.status === 'started') {
                     avatarManager.playDuringResponse();
                 }
                 break;
                 
             case 'response_chunk':
+                console.log('🔍 Response chunk:', data.content);
                 this.updateTovaMessage(data.content, data.metadata);
                 break;
                 
             case 'response_complete':
+                console.log('🔍 Response complete:', data.full_response);
                 this.finalizeTovaMessage(data.full_response, data.metadata);
                 avatarManager.stopAfterResponse();
                 break;
                 
             default:
-                console.log('Unknown message type:', data.type);
+                console.log('🔍 Unknown message type:', data.type, data);
         }
     }
 
