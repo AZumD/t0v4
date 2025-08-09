@@ -2,6 +2,7 @@
 from typing import AsyncGenerator, Dict, Any
 import json
 import logging
+import httpx
 from .base_client import BaseBrainClient
 
 
@@ -10,6 +11,8 @@ class MixtralClient(BaseBrainClient):
         super().__init__(base_url)
         self.model_name = "mixtral"
         self.logger = logging.getLogger(__name__)
+        self.stream_timeout_seconds = 300
+        self.request_timeout_seconds = 300
     
     def _format_prompt_chatml(self, prompt: str, system_prompt: str = None) -> str:
         """Format prompt using ChatML format for Dolphin Mixtral"""
@@ -50,16 +53,18 @@ class MixtralClient(BaseBrainClient):
                     "POST", 
                     f"{self.base_url}/completion",
                     json=payload,
-                    timeout=60.0
+                    timeout=self.stream_timeout_seconds
                 ) as response:
                     response.raise_for_status()
                     
                     async for line in response.aiter_lines():
+                        if not line:
+                            continue
                         if line.strip():
-                            self.logger.debug(f"Received line: {line[:100]}...")
+                            self.logger.debug(f"Received line: {line[:200]}...")
                             # Handle SSE format (data: prefix)
                             if line.startswith("data: "):
-                                data = line[6:]  # Remove "data: " prefix
+                                data = line[6:]
                                 if data == "[DONE]":
                                     break
                                 
@@ -68,10 +73,8 @@ class MixtralClient(BaseBrainClient):
                                     if "content" in chunk:
                                         content = chunk["content"]
                                         if content:
-                                            self.logger.debug(f"Yielding content: {content}")
                                             yield content
-                                except json.JSONDecodeError as e:
-                                    self.logger.debug(f"JSON decode error: {e}")
+                                except json.JSONDecodeError:
                                     continue
                             else:
                                 # Try to parse as regular JSON (non-SSE format)
@@ -80,33 +83,45 @@ class MixtralClient(BaseBrainClient):
                                     if "content" in chunk:
                                         content = chunk["content"]
                                         if content:
-                                            self.logger.debug(f"Yielding content: {content}")
                                             yield content
                                 except json.JSONDecodeError:
-                                    # Raw text response
                                     if line.strip():
-                                        self.logger.debug(f"Yielding raw content: {line.strip()}")
                                         yield line.strip()
             else:
                 # Handle non-streaming response
                 self.logger.debug(f"Sending non-streaming request to {self.base_url}/completion")
                 response = await self.client.post(
                     f"{self.base_url}/completion",
-                    json=payload,
-                    timeout=60.0
+                    json={**payload, "stream": False},
+                    timeout=self.request_timeout_seconds
                 )
                 response.raise_for_status()
                 result = response.json()
                 content = result.get("content", "")
                 if content:
-                    self.logger.debug(f"Yielding non-streaming content: {content}")
                     yield content
                             
+        except httpx.ReadTimeout as e:
+            self.logger.warning(f"Mixtral streaming timeout: {e}. Falling back to non-stream request")
+            try:
+                response = await self.client.post(
+                    f"{self.base_url}/completion",
+                    json={**payload, "stream": False},
+                    timeout=self.request_timeout_seconds
+                )
+                response.raise_for_status()
+                result = response.json()
+                content = result.get("content", "")
+                if content:
+                    yield content
+            except Exception as e2:
+                self.logger.error(f"Mixtral fallback error: {e2}")
+                yield f"Error: {type(e2).__name__}: {e2}"
         except Exception as e:
-            self.logger.error(f"Mixtral generation error: {str(e)}")
+            self.logger.error(f"Mixtral generation error: {e}")
             import traceback
             self.logger.error(f"Mixtral generation traceback: {traceback.format_exc()}")
-            yield f"Error: {str(e)}"
+            yield f"Error: {type(e).__name__}: {e}"
     
     async def health_check(self) -> bool:
         try:

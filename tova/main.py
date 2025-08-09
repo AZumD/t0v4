@@ -107,16 +107,18 @@ async def websocket_chat(websocket: WebSocket):
                         logger.info(f"🔍 Orchestrator yielded content len={len(content) if content else 0}")
                         if content:
                             response_chunks.append(content)
-                            # Stream each chunk to client
                             payload = {
                                 "type": "response_chunk",
                                 "content": content,
                                 "metadata": metadata
                             }
                             logger.info(f"🔍 Sending to client: {payload}")
-                            await websocket.send_json(payload)
+                            try:
+                                await websocket.send_json(payload)
+                            except Exception as se:
+                                logger.warning(f"🔍 Stopping stream, client disconnected: {se}")
+                                raise
                     else:
-                        # Raw string chunk
                         content = chunk_data
                         logger.info(f"🔍 Orchestrator yielded raw string len={len(content) if content else 0}")
                         if content:
@@ -126,7 +128,11 @@ async def websocket_chat(websocket: WebSocket):
                                 "content": content
                             }
                             logger.info(f"🔍 Sending to client: {payload}")
-                            await websocket.send_json(payload)
+                            try:
+                                await websocket.send_json(payload)
+                            except Exception as se:
+                                logger.warning(f"🔍 Stopping stream, client disconnected: {se}")
+                                raise
                 
                 logger.info(f"🔍 Finished processing, got {len(response_chunks)} chunks")
                 
@@ -134,11 +140,14 @@ async def websocket_chat(websocket: WebSocket):
                 logger.error(f"🔍 Error during message processing: {e}")
                 import traceback
                 logger.error(f"🔍 Traceback: {traceback.format_exc()}")
-                
-                await websocket.send_json({
-                    "type": "error",
-                    "message": str(e)
-                })
+                try:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": str(e)
+                    })
+                except Exception:
+                    # Client already disconnected; stop processing this loop
+                    break
                 continue
             
             # Send completion signal
@@ -149,8 +158,12 @@ async def websocket_chat(websocket: WebSocket):
                 "conversation_id": conversation_id
             }
             logger.info(f"🔍 Sending completion with len={len(full_response)}")
-            await websocket.send_json(completion_payload)
-            logger.info(f"🔍 Sent completion signal with response: {full_response[:50]}...")
+            try:
+                await websocket.send_json(completion_payload)
+                logger.info(f"🔍 Sent completion signal with response: {full_response[:50]}...")
+            except Exception as se:
+                logger.warning(f"🔍 Could not send completion (client disconnected): {se}")
+                break
     
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
