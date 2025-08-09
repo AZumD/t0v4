@@ -114,7 +114,8 @@ class TovaOrchestrator:
             self.logger.info("🔍 Orchestrator: Starting Mixtral response generation")
             async for chunk in self.mixtral.generate_response(
                 prompt=user_message,
-                system_prompt=system_prompt
+                system_prompt=system_prompt,
+                stream=False
             ):
                 self.logger.info(f"🔍 Orchestrator: Got chunk from Mixtral: {chunk[:50]}...")
                 yield chunk
