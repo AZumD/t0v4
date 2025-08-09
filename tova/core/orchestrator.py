@@ -12,7 +12,8 @@ from ..memory.conversation_store import ConversationStore
 class TovaOrchestrator:
     def __init__(self):
         self.mixtral = MixtralClient()
-        self.phi = PhiClient()
+        # Temporarily use Mixtral for both roles since Phi model doesn't work with this llama.cpp version
+        self.phi = MixtralClient(base_url="http://localhost:8000")
         self.prompt_stitcher = PromptStitcher()
         self.conversation_store = ConversationStore()
         self.logger = logging.getLogger(__name__)
@@ -90,13 +91,13 @@ class TovaOrchestrator:
             yield fallback_response
             return
         
-        # 1. Background analysis with Phi (async) - only if available
+        # 1. Background analysis with Phi (async) - TEMPORARILY DISABLED
         phi_task = None
-        if phi_ok:
-            self.logger.info("🔍 Orchestrator: Starting Phi background analysis")
-            phi_task = asyncio.create_task(
-                self._background_analysis(message, user_context)
-            )
+        # if phi_ok:
+        #     self.logger.info("🔍 Orchestrator: Starting Phi background analysis")
+        #     phi_task = asyncio.create_task(
+        #         self._background_analysis(message, user_context)
+        #     )
         
         # 2. Build dynamic prompt
         self.logger.info("🔍 Orchestrator: Building dynamic prompt")
@@ -125,15 +126,15 @@ class TovaOrchestrator:
             fallback_response = self._generate_fallback_response(message)
             yield fallback_response
         
-        # 4. Wait for Phi analysis to complete (if it was started)
-        if phi_task:
-            try:
-                self.logger.info("🔍 Orchestrator: Waiting for Phi analysis to complete")
-                analysis = await phi_task
-                await self._process_background_analysis(analysis)
-                self.logger.info("🔍 Orchestrator: Phi analysis completed")
-            except Exception as e:
-                self.logger.warning(f"🔍 Orchestrator: Phi analysis failed: {e}")
+        # 4. Wait for Phi analysis to complete (if it was started) - DISABLED
+        # if phi_task:
+        #     try:
+        #         self.logger.info("🔍 Orchestrator: Waiting for Phi analysis to complete")
+        #         analysis = await phi_task
+        #         await self._process_background_analysis(analysis)
+        #         self.logger.info("🔍 Orchestrator: Phi analysis completed")
+        #     except Exception as e:
+        #         self.logger.warning(f"🔍 Orchestrator: Phi analysis failed: {e}")
         
         self.logger.info("🔍 Orchestrator: Message processing completed")
     

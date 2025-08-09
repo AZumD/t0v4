@@ -21,111 +21,95 @@ class MixtralClient(BaseBrainClient):
         else:
             return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant"
     
-    async def generate_response(
-        self, 
-        prompt: str, 
-        temperature: float = 0.7,
-        max_tokens: int = 1000,
-        top_p: float = 0.9,
-        stream: bool = True,
-        system_prompt: str = None,
-        **kwargs
-    ) -> AsyncGenerator[str, None]:
-        """Generate streaming response from Mixtral"""
-        
-        # Format prompt using ChatML for Dolphin Mixtral
-        formatted_prompt = self._format_prompt_chatml(prompt, system_prompt)
-        
-        payload = {
-            "prompt": formatted_prompt,
-            "n_predict": max_tokens,  # Use n_predict instead of max_tokens for llama.cpp
-            "temperature": temperature,
-            "top_p": top_p,
-            "stream": stream,
-            "stop": ["<|im_end|>", "<|im_start|>", "Human:", "User:", "\n\nHuman:", "\n\nUser:"]
-        }
+    async def generate_response(self, prompt: str, **kwargs) -> AsyncGenerator[str, None]:
+        try:
+            formatted_prompt = self._format_prompt_chatml(prompt, kwargs.get('system_prompt'))
+            self.logger.info(f"🎭 Formatted prompt length: {len(formatted_prompt)}")
+            
+            payload = {
+                "prompt": formatted_prompt,
+                "n_predict": kwargs.get("max_tokens", 1000),
+                "temperature": kwargs.get("temperature", 0.7),
+                "stream": False,
+                "stop": ["</s>"]
+            }
+            
+            headers = {
+                "Content-Type": "application/json"
+            }
+            
+            self.logger.info(f"🎭 About to make POST request to {self.base_url}/completion")
+            self.logger.info(f"🎭 Payload keys: {list(payload.keys())}")
+            self.logger.info(f"🎭 Headers: {headers}")
+            
+            response = await self.client.post(
+                f"{self.base_url}/completion",
+                json=payload,
+                headers=headers,
+                timeout=60.0
+            )
+            
+            self.logger.info(f"🎭 Response received - Status: {response.status_code}")
+            self.logger.info(f"🎭 Response headers: {dict(response.headers)}")
+            
+            if response.status_code != 200:
+                error_text = response.text
+                self.logger.error(f"🎭 HTTP {response.status_code} error: {error_text}")
+                yield f"HTTP {response.status_code}: {error_text}"
+                return
+                
+            # Log the raw response
+            response_text = response.text
+            self.logger.info(f"🎭 Raw response (first 500 chars): {response_text[:500]}")
+            
+            # Parse the response content (for now, yield as-is for debugging)
+            if response_text:
+                self.logger.info("🎭 Processing response text...")
+                yield response_text
+            else:
+                self.logger.warning("🎭 Empty response received")
+                yield "Empty response from server"
+                
+        except httpx.TimeoutException as e:
+            self.logger.error(f"🎭 Timeout error: {str(e)}")
+            yield f"Timeout error: {str(e)}"
+        except httpx.HTTPStatusError as e:
+            self.logger.error(f"🎭 HTTP status error: {str(e)}")
+            yield f"HTTP error: {str(e)}"
+        except Exception as e:
+            self.logger.error(f"🎭 Unexpected error: {type(e).__name__}: {str(e)}")
+            self.logger.error(f"🎭 Error details: {repr(e)}")
+            yield f"Error: {type(e).__name__}: {str(e)}"
+
+    async def analyze_text(self, text: str, task: str = "summarize") -> str:
+        """Analyze text for specific task"""
+        self.logger.info(f"🎭 analyze_text called with task: {task}, text length: {len(text)}")
         
         try:
-            if stream:
-                # Handle streaming response
-                self.logger.debug(f"Sending streaming request to {self.base_url}/completion")
-                async with self.client.stream(
-                    "POST", 
-                    f"{self.base_url}/completion",
-                    json=payload,
-                    timeout=self.stream_timeout_seconds
-                ) as response:
-                    response.raise_for_status()
-                    
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-                        if line.strip():
-                            self.logger.debug(f"Received line: {line[:200]}...")
-                            # Handle SSE format (data: prefix)
-                            if line.startswith("data: "):
-                                data = line[6:]
-                                if data == "[DONE]":
-                                    break
-                                
-                                try:
-                                    chunk = json.loads(data)
-                                    if "content" in chunk:
-                                        content = chunk["content"]
-                                        if content:
-                                            yield content
-                                except json.JSONDecodeError:
-                                    continue
-                            else:
-                                # Try to parse as regular JSON (non-SSE format)
-                                try:
-                                    chunk = json.loads(line)
-                                    if "content" in chunk:
-                                        content = chunk["content"]
-                                        if content:
-                                            yield content
-                                except json.JSONDecodeError:
-                                    if line.strip():
-                                        yield line.strip()
-            else:
-                # Handle non-streaming response
-                self.logger.debug(f"Sending non-streaming request to {self.base_url}/completion")
-                response = await self.client.post(
-                    f"{self.base_url}/completion",
-                    json={**payload, "stream": False},
-                    timeout=self.request_timeout_seconds
-                )
-                response.raise_for_status()
-                result = response.json()
-                content = result.get("content", "")
-                if content:
-                    yield content
-                            
-        except httpx.ReadTimeout as e:
-            self.logger.warning(f"Mixtral streaming timeout: {e}. Falling back to non-stream request")
-            try:
-                response = await self.client.post(
-                    f"{self.base_url}/completion",
-                    json={**payload, "stream": False},
-                    timeout=self.request_timeout_seconds
-                )
-                response.raise_for_status()
-                result = response.json()
-                content = result.get("content", "")
-                if content:
-                    yield content
-            except Exception as e2:
-                self.logger.error(f"Mixtral fallback error: {e2}")
-                yield f"Error: {type(e2).__name__}: {e2}"
+            prompts = {
+                "summarize": f"Summarize this briefly:\n\n{text}\n\nSummary:",
+                "extract_topics": f"Extract key topics from this text:\n\n{text}\n\nTopics:",
+                "extract_preferences": f"Extract user preferences:\n\n{text}\n\nPreferences:",
+                "rate_importance": f"Rate importance (0-1):\n\n{text}\n\nImportance:"
+            }
+            
+            prompt = prompts.get(task, f"Analyze:\n\n{text}\n\nAnalysis:")
+            self.logger.info(f"🎭 Using prompt for {task}: {prompt[:100]}...")
+            
+            async for chunk in self.generate_response(prompt, stream=False, max_tokens=200):
+                self.logger.info(f"🎭 analyze_text received chunk: {chunk[:100]}...")
+                return chunk
+            
+            self.logger.warning(f"🎭 No chunks received for analyze_text task: {task}")
+            return f"No analysis available for {task}"
+            
         except Exception as e:
-            self.logger.error(f"Mixtral generation error: {e}")
-            import traceback
-            self.logger.error(f"Mixtral generation traceback: {traceback.format_exc()}")
-            yield f"Error: {type(e).__name__}: {e}"
-    
+            self.logger.error(f"🎭 analyze_text error: {type(e).__name__}: {str(e)}")
+            return f"Analysis error: {str(e)}"
+
     async def health_check(self) -> bool:
         try:
-            response = await self.client.get(f"{self.base_url}/health")
+            response = await self.client.get(f"{self.base_url}/v1/models", timeout=30.0)
             return response.status_code == 200
         except Exception as e:
             self.logger.error(f"Mixtral health check failed: {e}")

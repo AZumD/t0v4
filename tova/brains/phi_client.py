@@ -75,7 +75,7 @@ class PhiClient(BaseBrainClient):
     
     async def health_check(self) -> bool:
         try:
-            response = await self.client.get(f"{self.base_url}/health")
+            response = await self.client.get(f"{self.base_url}/v1/models")
             return response.status_code == 200
         except Exception as e:
             self.logger.error(f"Phi health check failed: {e}")

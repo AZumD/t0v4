@@ -5,10 +5,12 @@ import asyncio
 import json
 from pathlib import Path
 import sys
+import pytest
 
 # Add the project root to the path
 sys.path.append(str(Path(__file__).parent.parent))
 
+@pytest.mark.asyncio
 async def test_frontend_components():
     """Test the frontend components"""
     print("🧪 Testing TOVA v4 Frontend Components...")

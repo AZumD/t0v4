@@ -7,7 +7,7 @@ import logging
 
 
 class BaseBrainClient(ABC):
-    def __init__(self, base_url: str, timeout: int = 30):
+    def __init__(self, base_url: str, timeout: int = 60):
         self.base_url = base_url
         self.timeout = timeout
         self.client = httpx.AsyncClient(timeout=timeout)
@@ -16,7 +16,7 @@ class BaseBrainClient(ABC):
     async def health_check(self) -> bool:
         """Check if the brain server is responding"""
         try:
-            response = await self.client.get(f"{self.base_url}/health")
+            response = await self.client.get(f"{self.base_url}/v1/models")
             return response.status_code == 200
         except Exception as e:
             self.logger.error(f"Health check failed: {e}")

@@ -5,6 +5,7 @@ from tova.brains import MixtralClient, PhiClient
 from tova.core import TovaOrchestrator
 
 
+@pytest.mark.asyncio
 async def test_brain_clients():
     """Test basic brain client functionality."""
     mixtral = MixtralClient("http://localhost:8000")
@@ -14,13 +15,15 @@ async def test_brain_clients():
     mixtral_health = await mixtral.health_check()
     phi_health = await phi.health_check()
     
-    print(f"Mixtral health: {mixtral_health}")
-    print(f"Phi health: {phi_health}")
+    # Health endpoint for llama.cpp old version is /v1/models
+    print(f"Mixtral health (/v1/models): {mixtral_health}")
+    print(f"Phi health (/v1/models): {phi_health}")
     
     await mixtral.close()
     await phi.close()
 
 
+@pytest.mark.asyncio
 async def test_orchestrator():
     """Test orchestrator initialization."""
     orchestrator = TovaOrchestrator()
