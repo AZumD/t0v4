@@ -312,17 +312,25 @@ class TovaInterface {
     }
 
     updateTovaMessage(content, metadata) {
+        console.log('🔍 updateTovaMessage called with content:', content);
+        console.log('🔍 Current streaming message exists:', !!this.streamingMessage);
+        
         const messagesContainer = document.getElementById('chatMessages');
         
         // Get or create streaming message
         if (!this.streamingMessage) {
+            console.log('🔍 Creating new streaming message');
             this.streamingMessage = this.addMessage('tova', content, metadata);
             this.streamingMessage.classList.add('streaming');
         } else {
-            // Update existing streaming message (append new chunk)
+            console.log('🔍 Updating existing streaming message');
             const contentDiv = this.streamingMessage.querySelector('.content-div');
-            const appended = this.formatTovaMessage(content, null);
-            contentDiv.innerHTML = contentDiv.innerHTML + appended;
+            const currentContent = contentDiv.innerHTML;
+            console.log('🔍 Current content length:', currentContent.length);
+            console.log('🔍 Adding chunk:', content);
+            
+            // Append chunk by concatenating with current content
+            contentDiv.innerHTML = this.formatTovaMessage(this._stripHtml(currentContent) + content, metadata);
         }
 
         // Handle metadata updates
@@ -331,6 +339,13 @@ class TovaInterface {
         }
 
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // Helper: strip HTML to get raw text before re-formatting
+    _stripHtml(html) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        return tmp.textContent || tmp.innerText || '';
     }
 
     finalizeTovaMessage(content, metadata) {

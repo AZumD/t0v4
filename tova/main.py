@@ -91,7 +91,6 @@ async def websocket_chat(websocket: WebSocket):
             })
             logger.info("🔍 Sent typing indicator")
             
-            # Process message through orchestrator with persistence
             response_chunks = []
             logger.info("🔍 Starting message processing...")
             
@@ -105,23 +104,29 @@ async def websocket_chat(websocket: WebSocket):
                     if isinstance(chunk_data, dict):
                         content = chunk_data.get("content", "")
                         metadata = chunk_data.get("metadata", {})
+                        logger.info(f"🔍 Orchestrator yielded content len={len(content) if content else 0}")
                         if content:
                             response_chunks.append(content)
                             # Stream each chunk to client
-                            await websocket.send_json({
+                            payload = {
                                 "type": "response_chunk",
                                 "content": content,
                                 "metadata": metadata
-                            })
-                            logger.info(f"🔍 Sent chunk to client: {content[:50]}...")
+                            }
+                            logger.info(f"🔍 Sending to client: {payload}")
+                            await websocket.send_json(payload)
                     else:
-                        if chunk_data:
-                            response_chunks.append(chunk_data)
-                            await websocket.send_json({
+                        # Raw string chunk
+                        content = chunk_data
+                        logger.info(f"🔍 Orchestrator yielded raw string len={len(content) if content else 0}")
+                        if content:
+                            response_chunks.append(content)
+                            payload = {
                                 "type": "response_chunk",
-                                "content": chunk_data
-                            })
-                            logger.info(f"🔍 Sent chunk to client: {chunk_data[:50]}...")
+                                "content": content
+                            }
+                            logger.info(f"🔍 Sending to client: {payload}")
+                            await websocket.send_json(payload)
                 
                 logger.info(f"🔍 Finished processing, got {len(response_chunks)} chunks")
                 
@@ -138,13 +143,15 @@ async def websocket_chat(websocket: WebSocket):
             
             # Send completion signal
             full_response = "".join(response_chunks)
-            await websocket.send_json({
+            completion_payload = {
                 "type": "response_complete",
                 "full_response": full_response,
                 "conversation_id": conversation_id
-            })
+            }
+            logger.info(f"🔍 Sending completion with len={len(full_response)}")
+            await websocket.send_json(completion_payload)
             logger.info(f"🔍 Sent completion signal with response: {full_response[:50]}...")
-            
+    
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
         logger.info("Client disconnected from chat")
