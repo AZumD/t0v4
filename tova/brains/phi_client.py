@@ -31,16 +31,20 @@ class PhiClient(BaseBrainClient):
         }
         
         try:
+            self.logger.debug(f"Sending analysis request to {self.base_url}/completion")
             response = await self.client.post(
                 f"{self.base_url}/completion",
-                json=payload
+                json=payload,
+                timeout=30.0
             )
             response.raise_for_status()
             result = response.json()
-            return result.get("content", "").strip()
+            content = result.get("content", "").strip()
+            self.logger.debug(f"Received analysis response: {content[:100]}...")
+            return content
             
         except Exception as e:
-            self.logger.error(f"Phi analysis error: {e}")
+            self.logger.error(f"Phi analysis error: {str(e)}")
             return ""
     
     async def generate_response(self, prompt: str, **kwargs) -> AsyncGenerator[str, None]:

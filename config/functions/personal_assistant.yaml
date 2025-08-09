@@ -1,6 +1,41 @@
 # Personal assistant function manifest
-name: personal_assistant
-description: "Handles scheduling, reminders, and simple information retrieval"
+name: "Personal Assistant"
+description: "Calendar management and productivity optimization"
+triggers:
+  - "calendar"
+  - "schedule"
+  - "meeting"
+  - "appointment"
+  - "time management"
+  - "productivity"
+
+activation_conditions:
+  keywords: ["calendar", "schedule", "meeting", "appointment", "plan", "organize"]
+  plugins_required: ["calendar"]
+
+prompt_addition: |
+  
+  FUNCTION: Personal Assistant Mode
+  
+  You're now operating as a personal assistant with deep calendar integration:
+  - Focus on calendar management, scheduling, and time optimization
+  - Proactively suggest schedule improvements and time blocking
+  - Help prioritize tasks and manage deadlines
+  - Provide reminders and preparation for upcoming events
+  - Analyze schedule patterns and suggest optimizations
+  - Handle meeting coordination and appointment booking
+  
+  Use your personality while being exceptionally organized and proactive about time management.
+
+capabilities:
+  - calendar_analysis
+  - meeting_scheduling
+  - time_blocking
+  - deadline_tracking
+  - schedule_optimization
+  - reminder_management
+
 parameters:
-  date_format: "%Y-%m-%d"
-  timezone: UTC 
+  focus: "time_management"
+  proactivity: "high"
+  organization: "maximum" 

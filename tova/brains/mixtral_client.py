@@ -32,28 +32,69 @@ class MixtralClient(BaseBrainClient):
         }
         
         try:
-            async with self.client.stream(
-                "POST", 
-                f"{self.base_url}/completion",
-                json=payload
-            ) as response:
+            if stream:
+                # Handle streaming response
+                self.logger.debug(f"Sending streaming request to {self.base_url}/completion")
+                async with self.client.stream(
+                    "POST", 
+                    f"{self.base_url}/completion",
+                    json=payload,
+                    timeout=60.0
+                ) as response:
+                    response.raise_for_status()
+                    
+                    async for line in response.aiter_lines():
+                        if line.strip():
+                            self.logger.debug(f"Received line: {line[:100]}...")
+                            # Handle SSE format (data: prefix)
+                            if line.startswith("data: "):
+                                data = line[6:]  # Remove "data: " prefix
+                                if data == "[DONE]":
+                                    break
+                                
+                                try:
+                                    chunk = json.loads(data)
+                                    if "content" in chunk:
+                                        content = chunk["content"]
+                                        if content:
+                                            self.logger.debug(f"Yielding content: {content}")
+                                            yield content
+                                except json.JSONDecodeError as e:
+                                    self.logger.debug(f"JSON decode error: {e}")
+                                    continue
+                            else:
+                                # Try to parse as regular JSON (non-SSE format)
+                                try:
+                                    chunk = json.loads(line)
+                                    if "content" in chunk:
+                                        content = chunk["content"]
+                                        if content:
+                                            self.logger.debug(f"Yielding content: {content}")
+                                            yield content
+                                except json.JSONDecodeError:
+                                    # Raw text response
+                                    if line.strip():
+                                        self.logger.debug(f"Yielding raw content: {line.strip()}")
+                                        yield line.strip()
+            else:
+                # Handle non-streaming response
+                self.logger.debug(f"Sending non-streaming request to {self.base_url}/completion")
+                response = await self.client.post(
+                    f"{self.base_url}/completion",
+                    json=payload,
+                    timeout=60.0
+                )
                 response.raise_for_status()
-                
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data = line[6:]  # Remove "data: " prefix
-                        if data == "[DONE]":
-                            break
-                        
-                        try:
-                            chunk = json.loads(data)
-                            if "content" in chunk:
-                                yield chunk["content"]
-                        except json.JSONDecodeError:
-                            continue
+                result = response.json()
+                content = result.get("content", "")
+                if content:
+                    self.logger.debug(f"Yielding non-streaming content: {content}")
+                    yield content
                             
         except Exception as e:
-            self.logger.error(f"Mixtral generation error: {e}")
+            self.logger.error(f"Mixtral generation error: {str(e)}")
+            import traceback
+            self.logger.error(f"Mixtral generation traceback: {traceback.format_exc()}")
             yield f"Error: {str(e)}"
     
     async def health_check(self) -> bool:

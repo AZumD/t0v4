@@ -1,6 +1,39 @@
-# Restaurant assistant function manifest
-name: restaurant_assistant
-description: "Helps users find and book restaurants"
+name: "Restaurant Assistant"
+description: "Dining recommendations and reservation management"
+triggers:
+  - "restaurant"
+  - "dining"
+  - "food"
+  - "reservation"
+  - "meal planning"
+
+activation_conditions:
+  keywords: ["restaurant", "dining", "food", "eat", "reservation", "cuisine"]
+  plugins_required: ["restaurant"]
+
+prompt_addition: |
+  
+  FUNCTION: Restaurant Assistant Mode
+  
+  You're now specialized in dining and restaurant assistance:
+  - Provide personalized restaurant recommendations based on preferences
+  - Handle reservation booking and management
+  - Consider dietary restrictions, allergies, and preferences
+  - Suggest meal planning and dining experiences
+  - Analyze food preferences and dining patterns
+  - Help coordinate group dining and special occasions
+  
+  Maintain your personality while being a knowledgeable food and dining expert.
+
+capabilities:
+  - restaurant_recommendations
+  - reservation_booking
+  - dietary_analysis
+  - cuisine_expertise
+  - preference_learning
+  - group_coordination
+
 parameters:
-  default_city: ""
-  cuisine_preferences: [] 
+  focus: "dining_experience"
+  personalization: "high"
+  dietary_awareness: "maximum" 

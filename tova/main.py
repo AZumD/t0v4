@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 import logging
 import asyncio
 from pathlib import Path
+import uuid
 
 from .core.orchestrator import TovaOrchestrator
 from .api.websocket import WebSocketManager
@@ -30,12 +31,16 @@ async def startup_event():
     """Initialize TOVA system on startup"""
     logger.info("🎪 Starting TOVA v4...")
     
-    # Initialize orchestrator
-    if await orchestrator.initialize():
-        logger.info("✅ TOVA v4 online and ready!")
-    else:
-        logger.error("❌ TOVA v4 failed to initialize")
-        raise RuntimeError("Failed to initialize TOVA orchestrator")
+    # Initialize orchestrator (but don't fail if brains aren't available)
+    try:
+        if await orchestrator.initialize():
+            logger.info("✅ TOVA v4 online and ready!")
+        else:
+            logger.warning("⚠️  TOVA v4 started in degraded mode - brain servers not available")
+            logger.info("✅ TOVA v4 online (degraded mode) - frontend will work but AI features disabled")
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to initialize brains: {e}")
+        logger.info("✅ TOVA v4 online (degraded mode) - frontend will work but AI features disabled")
 
 @app.on_event("shutdown") 
 async def shutdown_event():
@@ -63,6 +68,10 @@ async def websocket_chat(websocket: WebSocket):
     """Main chat WebSocket endpoint"""
     await ws_manager.connect(websocket)
     
+    # Initialize conversation for this connection
+    user_id = "default_user"  # TODO: Implement user authentication
+    conversation_id = await orchestrator.start_conversation(user_id)
+    
     try:
         while True:
             # Receive message from client
@@ -79,21 +88,37 @@ async def websocket_chat(websocket: WebSocket):
                 "status": "started"
             })
             
-            # Process message through orchestrator
+            # Process message through orchestrator with persistence
             response_chunks = []
-            async for chunk in orchestrator.process_user_message(message, context):
-                if chunk:
-                    response_chunks.append(chunk)
-                    # Stream each chunk to client
-                    await websocket.send_json({
-                        "type": "response_chunk",
-                        "content": chunk
-                    })
+            async for chunk_data in orchestrator.process_user_message_with_persistence(
+                conversation_id=conversation_id,
+                message=message,
+                user_context=context
+            ):
+                if isinstance(chunk_data, dict):
+                    content = chunk_data.get("content", "")
+                    metadata = chunk_data.get("metadata", {})
+                    if content:
+                        response_chunks.append(content)
+                        # Stream each chunk to client
+                        await websocket.send_json({
+                            "type": "response_chunk",
+                            "content": content,
+                            "metadata": metadata
+                        })
+                else:
+                    if chunk_data:
+                        response_chunks.append(chunk_data)
+                        await websocket.send_json({
+                            "type": "response_chunk",
+                            "content": chunk_data
+                        })
             
             # Send completion signal
             await websocket.send_json({
                 "type": "response_complete",
-                "full_response": "".join(response_chunks)
+                "full_response": "".join(response_chunks),
+                "conversation_id": conversation_id
             })
             
     except WebSocketDisconnect:

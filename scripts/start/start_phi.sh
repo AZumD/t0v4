@@ -2,18 +2,26 @@
 set -e
 
 LLAMA_CPP_PATH="/home/anthon/llama.cpp"
-PHI_MODEL_PATH="/home/anthon/Phi-3.5-mini-instruct-Q4_K_M.gguf"
+LLAMA_SERVER_PATH="/home/anthon/llama.cpp/build/bin/llama-server"
+PHI_MODEL_PATH="/home/anthon/llama.cpp/models/Phi-3.5-mini-instruct-Q4_K_M.gguf"
 LOG_PATH="/home/anthon/t0v4/tova_v4/data/logs"
 
 # Create logs directory
 mkdir -p "$LOG_PATH"
 
-echo "🔍 Starting Phi server on port 8001..."
+# Check if Phi model exists
+if [ ! -f "$PHI_MODEL_PATH" ]; then
+    echo "❌ Phi model not found at: $PHI_MODEL_PATH"
+    echo "   Please ensure the Phi model is downloaded to the correct location"
+    exit 1
+fi
+
+echo "🔍 Starting Phi server on port 8001 with model: $PHI_MODEL_PATH"
 
 cd "$LLAMA_CPP_PATH"
 
 # Start llama.cpp server with CPU-optimized settings for Phi
-./llama-server \
+"$LLAMA_SERVER_PATH" \
     --model "$PHI_MODEL_PATH" \
     --host 0.0.0.0 \
     --port 8001 \
@@ -23,9 +31,6 @@ cd "$LLAMA_CPP_PATH"
     --batch-size 256 \
     --ubatch-size 256 \
     --no-mmap \
-    --numa isolate \
-    --log-format text \
-    --verbose \
     2>&1 | tee "$LOG_PATH/phi.log" &
 
 PHI_PID=$!
