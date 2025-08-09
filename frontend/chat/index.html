@@ -1,20 +1,111 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TOVA v4 Chat</title>
-  <link rel="stylesheet" href="./chat.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOVA v4 - AI Companion</title>
+    <link rel="stylesheet" href="/static/chat/chat.css">
 </head>
 <body>
-  <main id="app">
-    <h1>TOVA v4 Chat</h1>
-    <div id="messages"></div>
-    <form id="form">
-      <input id="input" type="text" placeholder="Type a message" />
-      <button type="submit">Send</button>
-    </form>
-  </main>
-  <script src="./chat.js"></script>
+    <div class="topbar">
+        <div class="logotext">TOVA v4</div>
+        <div class="nav-links">
+            <a href="/admin" class="nav-link">🛠️ Admin</a>
+            <a href="/admin/memory" class="nav-link">🧠 Memory</a>
+            <a href="/admin/personality" class="nav-link">🎭 Personality</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="chat-pane">
+            <!-- Immersive debug popup -->
+            <div id="immersive-debug-popup" class="immersive-debug"></div>
+            
+            <!-- Chat messages -->
+            <div id="chatMessages">
+                <div class="chat-bubble system">
+                    <strong>System:</strong> Initializing TOVA v4 dual-brain system...
+                </div>
+            </div>
+            
+            <!-- Chat input -->
+            <div class="chat-input">
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Type your message to TOVA..."
+                        disabled
+                    />
+                    <button class="send-btn" id="sendBtn" disabled>Send</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-pane">
+            <!-- Avatar container with context monitoring -->
+            <div class="avatar-container" id="avatarContainer">
+                <video id="tovaAvatar" muted preload="metadata" class="avatar-video">
+                    <source src="/static/assets/avatar/tova_default.mp4" type="video/mp4">
+                    TOVA Avatar
+                </video>
+                <div class="debug-bubble" id="debugBubble">💭</div>
+            </div>
+            
+            <!-- Debug Panel -->
+            <div class="debug-panel" id="debugPanel">
+                <div class="debug-header">
+                    <span class="debug-title">🔍 TOVA Debug Info</span>
+                    <button class="debug-close" onclick="toggleDebugPanel()">×</button>
+                </div>
+                <div class="debug-content">
+                    <div class="debug-section">
+                        <div class="debug-section-title">🧠 Memory (RAG)</div>
+                        <div class="debug-section-content" id="debugMemory">
+                            No memory data yet
+                        </div>
+                    </div>
+                    <div class="debug-section">
+                        <div class="debug-section-title">🎭 Active Modules</div>
+                        <div class="debug-section-content" id="debugModules">
+                            <span class="debug-module core">tova_core</span>
+                        </div>
+                    </div>
+                    <div class="debug-section">
+                        <div class="debug-section-title">🎯 Dual Brain Status</div>
+                        <div class="debug-section-content" id="debugBrains">
+                            <div id="mixtralStatus">🎭 Mixtral: <span class="status-offline">Connecting...</span></div>
+                            <div id="phiStatus">🔍 Phi: <span class="status-offline">Connecting...</span></div>
+                        </div>
+                    </div>
+                    <div class="debug-section">
+                        <div class="debug-section-title">⚡ Performance</div>
+                        <div class="debug-section-content" id="debugPerformance">
+                            No performance data yet
+                        </div>
+                    </div>
+                    <div class="debug-section">
+                        <div class="debug-section-title">🎯 Context</div>
+                        <div class="debug-section-content" id="debugContext">
+                            Context window: 0% used
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Context Actions -->
+            <div class="context-actions" id="contextActions">
+                <button class="context-btn compress" onclick="compressContext()">📝 Compress</button>
+                <button class="context-btn reset" onclick="resetContext()">🔄 Reset</button>
+            </div>
+            
+            <!-- Status Block -->
+            <div class="status-block" id="statusBlock">
+                Brains: Connecting • Context: 0% • Mood: Neutral
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/chat/chat.js"></script>
 </body>
 </html> 

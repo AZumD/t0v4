@@ -1,34 +1,44 @@
-"""Configuration utilities for TOVA v4.
-
-Loads environment variables and YAML-based personalities/moods/functions.
-"""
-from __future__ import annotations
-
+"""Configuration management for TOVA v4"""
 import os
+from typing import Dict, Any
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict
-
-import yaml
-
 
 @dataclass
 class Settings:
-    env: str = os.getenv("ENV", "development")
-    log_level: str = os.getenv("LOG_LEVEL", "info")
-    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    chromadb_path: str = os.getenv("CHROMADB_PATH", "./data/rag")
-    mixtral_api_key: str = os.getenv("MIXTRAL_API_KEY", "")
-    phi_api_key: str = os.getenv("PHI_API_KEY", "")
+    # Server configuration
+    host: str = "0.0.0.0"
+    port: int = 8002
+    debug: bool = False
+    
+    # Brain endpoints
+    mixtral_url: str = "http://localhost:8000"
+    phi_url: str = "http://localhost:8001"
+    
+    # Model parameters
+    mixtral_temperature: float = 0.7
+    mixtral_max_tokens: int = 1000
+    mixtral_top_p: float = 0.9
+    
+    phi_temperature: float = 0.3
+    phi_max_tokens: int = 500
+    
+    # Paths
+    config_path: str = "config"
+    data_path: str = "data"
+    log_path: str = "data/logs"
+    
+    def __post_init__(self):
+        # Load from environment variables if available
+        self.host = os.getenv("TOVA_HOST", self.host)
+        self.port = int(os.getenv("TOVA_PORT", self.port))
+        self.debug = os.getenv("TOVA_DEBUG", "false").lower() == "true"
+        self.mixtral_url = os.getenv("TOVA_MIXTRAL_URL", self.mixtral_url)
+        self.phi_url = os.getenv("TOVA_PHI_URL", self.phi_url)
 
+_settings = None
 
-def load_yaml(path: str | Path) -> Dict[str, Any]:
-    """Load a YAML file and return a dictionary. Returns empty dict if missing."""
-    p = Path(path)
-    if not p.exists():
-        return {}
-    with p.open("r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
-
-
-settings = Settings() 
+def get_settings() -> Settings:
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings 
