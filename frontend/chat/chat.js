@@ -319,9 +319,10 @@ class TovaInterface {
             this.streamingMessage = this.addMessage('tova', content, metadata);
             this.streamingMessage.classList.add('streaming');
         } else {
-            // Update existing streaming message
+            // Update existing streaming message (append new chunk)
             const contentDiv = this.streamingMessage.querySelector('.content-div');
-            contentDiv.innerHTML = this.formatTovaMessage(content, metadata);
+            const appended = this.formatTovaMessage(content, null);
+            contentDiv.innerHTML = contentDiv.innerHTML + appended;
         }
 
         // Handle metadata updates
@@ -337,6 +338,11 @@ class TovaInterface {
             this.streamingMessage.classList.remove('streaming');
             const contentDiv = this.streamingMessage.querySelector('.content-div');
             contentDiv.innerHTML = this.formatTovaMessage(content, metadata);
+        } else {
+            // No chunks were streamed; still show the final content
+            if (content && content.trim().length > 0) {
+                this.addMessage('tova', content, metadata);
+            }
         }
         
         this.streamingMessage = null;
