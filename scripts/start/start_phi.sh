@@ -1,13 +1,18 @@
 #!/bin/bash
 set -e
 
-LLAMA_CPP_PATH="/home/anthon/llama.cpp"
-LLAMA_SERVER_PATH="/home/anthon/llama.cpp/build/bin/server"
+LLAMA_SERVER_BIN="$HOME/llm/bin/llama-server"
 PHI_MODEL_PATH="/home/anthon/llama.cpp/models/Phi-3.5-mini-instruct-Q4_K_M.gguf"
 LOG_PATH="/home/anthon/t0v4/tova_v4/data/logs"
 
 # Create logs directory
 mkdir -p "$LOG_PATH"
+
+# Check binary
+if [ ! -x "$LLAMA_SERVER_BIN" ]; then
+    echo "❌ llama-server not found at: $LLAMA_SERVER_BIN"
+    exit 1
+fi
 
 # Check if Phi model exists
 if [ ! -f "$PHI_MODEL_PATH" ]; then
@@ -18,17 +23,15 @@ fi
 
 echo "🔍 Starting Phi server on port 8001 with model: $PHI_MODEL_PATH"
 
-cd "$LLAMA_CPP_PATH"
-
-# Start llama.cpp server with CPU-optimized settings for Phi (older llama.cpp)
-"$LLAMA_SERVER_PATH" \
+# Start llama.cpp server with CPU-only settings for Phi
+"$LLAMA_SERVER_BIN" \
     --model "$PHI_MODEL_PATH" \
     --host 0.0.0.0 \
     --port 8001 \
-    --ctx-size 4096 \
-    --threads 12 \
+    -c 4096 \
+    -t "$(nproc)" \
     --batch-size 256 \
-    --no-mmap \
+    -ngl 0 \
     2>&1 | tee "$LOG_PATH/phi.log" &
 
 PHI_PID=$!
@@ -41,8 +44,8 @@ echo "🌐 Endpoint: http://localhost:8001"
 # Wait a moment for server to start
 sleep 3
 
-# Test if server is responding (use /v1/models instead of /health)
-if curl -s http://localhost:8001/v1/models > /dev/null; then
+# Test if server is responding using /completion
+if curl -s "http://localhost:8001/completion" -H 'Content-Type: application/json' -d '{"prompt":"ping","n_predict":4}' > /dev/null; then
     echo "✅ Phi server is responding"
 else
     echo "❌ Phi server failed to start properly"

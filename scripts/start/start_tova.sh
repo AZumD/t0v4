@@ -1,16 +1,18 @@
 #!/bin/bash
 set -e
 
-PROJECT_ROOT="/home/anthon/t0v4/tova_v4"
+PROJECT_ROOT="/home/anthon/t0v4"
 LOG_PATH="$PROJECT_ROOT/data/logs"
+
+mkdir -p "$LOG_PATH"
 
 echo "🎪 Starting TOVA Core on port 8002..."
 
 cd "$PROJECT_ROOT"
 
-# Activate virtual environment if it exists
-if [ -d "mistralvenv" ]; then
-    source mistralvenv/bin/activate
+# Activate virtual environment if it exists (~/.venvs/mistralvenv)
+if [ -f "$HOME/.venvs/mistralvenv/bin/activate" ]; then
+    source "$HOME/.venvs/mistralvenv/bin/activate"
 fi
 
 # Start TOVA Core FastAPI application
