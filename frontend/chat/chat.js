@@ -76,16 +76,24 @@ class AvatarManager {
     }
     
     playDuringResponse() {
-        if (!this.isPlaying && this.video) {
-            this.isPlaying = true;
-            // Ensure the avatar loops continuously while streaming
-            this.video.loop = true;
-            this.video.currentTime = 0;
-            this.video.play().catch(e => {
+        if (!this.video) return;
+        // Ensure the avatar loops continuously while streaming
+        this.video.loop = true;
+
+        // If the video is already playing, do not reset time; keep playing seamlessly
+        if (this.isPlaying && !this.video.paused) {
+            return;
+        }
+
+        // Start playing only if paused/stopped, without forcing a seek to 0
+        this.video.play()
+            .then(() => {
+                this.isPlaying = true;
+            })
+            .catch(e => {
                 console.error('Video play failed:', e);
                 this.isPlaying = false;
             });
-        }
     }
     
     stopAfterResponse() {
@@ -183,7 +191,11 @@ class TovaInterface {
                 console.log('🔍 RAW WebSocket message received:', event.data);
                 try {
                     const data = JSON.parse(event.data);
-                    console.log('🔍 PARSED WebSocket data:', data);
+                    // Timing logs: mark when client receives server timestamps
+                    if (data.t) {
+                        const now = performance.now();
+                        console.log(`⏱ client recv type=${data.type} t_server=${data.t.toFixed ? data.t.toFixed(3) : data.t} t_client=${now.toFixed(3)}ms`);
+                    }
                     this.handleMessage(data);
                 } catch (e) {
                     console.error('Failed to parse message:', e);
@@ -327,6 +339,12 @@ class TovaInterface {
         
         const messagesContainer = document.getElementById('chatMessages');
         
+        // Mark first render timing
+        if (!this._firstChunkRenderedAt) {
+            this._firstChunkRenderedAt = performance.now();
+            console.log(`⏱ first chunk rendered at t_client=${this._firstChunkRenderedAt.toFixed(3)}ms`);
+        }
+        
         // Get or create streaming message
         if (!this.streamingMessage) {
             console.log('🔍 Creating new streaming message');
@@ -371,6 +389,7 @@ class TovaInterface {
         }
         
         this.streamingMessage = null;
+        this._firstChunkRenderedAt = null;
         
         if (metadata) {
             this.handleMetadata(metadata);

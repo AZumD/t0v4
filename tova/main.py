@@ -6,6 +6,7 @@ import logging
 import asyncio
 from pathlib import Path
 import uuid
+import time
 
 from .core.orchestrator import TovaOrchestrator
 from .api.websocket import WebSocketManager
@@ -78,20 +79,23 @@ async def websocket_chat(websocket: WebSocket):
             data = await websocket.receive_json()
             message = data.get("message", "")
             context = data.get("context", {})
-            
-            logger.info(f"🔍 Received message: {message}")
+            recv_t = time.perf_counter()
+            logger.info(f"🔍 Received message at t={recv_t:.6f}: {message}")
             
             if not message.strip():
                 continue
             
             # Send typing indicator
+            typing_t = time.perf_counter()
             await websocket.send_json({
                 "type": "typing",
-                "status": "started"
+                "status": "started",
+                "t": typing_t
             })
-            logger.info("🔍 Sent typing indicator")
+            logger.info(f"🔍 Sent typing at t={typing_t:.6f} (Δrecv→typing={(typing_t - recv_t)*1000:.1f}ms)")
             
             response_chunks = []
+            first_chunk_emitted = False
             logger.info("🔍 Starting message processing...")
             
             try:
@@ -100,39 +104,40 @@ async def websocket_chat(websocket: WebSocket):
                     message=message,
                     user_context=context
                 ):
-                    logger.info(f"🔍 Got chunk_data: {chunk_data}")
                     if isinstance(chunk_data, dict):
                         content = chunk_data.get("content", "")
                         metadata = chunk_data.get("metadata", {})
-                        logger.info(f"🔍 Orchestrator yielded content len={len(content) if content else 0}")
                         if content:
                             response_chunks.append(content)
+                            now_t = time.perf_counter()
+                            if not first_chunk_emitted:
+                                first_chunk_emitted = True
+                                logger.info(
+                                    f"🔍 First backend chunk ready at t={now_t:.6f} (Δtyping→first={(now_t - typing_t)*1000:.1f}ms, Δrecv→first={(now_t - recv_t)*1000:.1f}ms)"
+                                )
                             payload = {
                                 "type": "response_chunk",
                                 "content": content,
-                                "metadata": metadata
+                                "metadata": metadata,
+                                "t": now_t
                             }
-                            logger.info(f"🔍 Sending to client: {payload}")
-                            try:
-                                await websocket.send_json(payload)
-                            except Exception as se:
-                                logger.warning(f"🔍 Stopping stream, client disconnected: {se}")
-                                raise
+                            await websocket.send_json(payload)
                     else:
                         content = chunk_data
-                        logger.info(f"🔍 Orchestrator yielded raw string len={len(content) if content else 0}")
                         if content:
                             response_chunks.append(content)
+                            now_t = time.perf_counter()
+                            if not first_chunk_emitted:
+                                first_chunk_emitted = True
+                                logger.info(
+                                    f"🔍 First backend chunk ready at t={now_t:.6f} (Δtyping→first={(now_t - typing_t)*1000:.1f}ms, Δrecv→first={(now_t - recv_t)*1000:.1f}ms)"
+                                )
                             payload = {
                                 "type": "response_chunk",
-                                "content": content
+                                "content": content,
+                                "t": now_t
                             }
-                            logger.info(f"🔍 Sending to client: {payload}")
-                            try:
-                                await websocket.send_json(payload)
-                            except Exception as se:
-                                logger.warning(f"🔍 Stopping stream, client disconnected: {se}")
-                                raise
+                            await websocket.send_json(payload)
                 
                 logger.info(f"🔍 Finished processing, got {len(response_chunks)} chunks")
                 
@@ -152,12 +157,14 @@ async def websocket_chat(websocket: WebSocket):
             
             # Send completion signal
             full_response = "".join(response_chunks)
+            completion_t = time.perf_counter()
             completion_payload = {
                 "type": "response_complete",
                 "full_response": full_response,
-                "conversation_id": conversation_id
+                "conversation_id": conversation_id,
+                "t": completion_t
             }
-            logger.info(f"🔍 Sending completion with len={len(full_response)}")
+            logger.info(f"🔍 Sending completion at t={completion_t:.6f} (Δrecv→complete={(completion_t - recv_t)*1000:.1f}ms)")
             try:
                 await websocket.send_json(completion_payload)
                 logger.info(f"🔍 Sent completion signal with response: {full_response[:50]}...")

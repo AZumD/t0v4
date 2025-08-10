@@ -124,18 +124,23 @@ class TovaOrchestrator:
         
         # 2. Build dynamic prompt
         self.logger.info("🔍 Orchestrator: Building dynamic prompt")
+        build_t0 = time.perf_counter()
         system_prompt, user_message = await self.prompt_stitcher.build_prompt(
             message=message,
             mood=self.current_mood,
             function=self.active_function,
             context=user_context
         )
-        self.logger.info(f"🔍 Orchestrator: Built system prompt: {system_prompt[:100]}...")
-        self.logger.info(f"🔍 Orchestrator: Built user message: {user_message[:100]}...")
+        build_t1 = time.perf_counter()
+        self.logger.info(
+            f"🔍 Orchestrator: Built prompts in {(build_t1 - build_t0)*1000:.1f}ms; system[{len(system_prompt)}], user[{len(user_message)}]"
+        )
         
         # 3. Generate response with Mixtral (streaming) - only if available
         if mixtral_ok:
             self.logger.info("🔍 Orchestrator: Starting Mixtral response generation")
+            first_chunk = True
+            gen_t0 = time.perf_counter()
             async for chunk in self.mixtral.generate_response(
                 prompt=user_message,
                 system_prompt=system_prompt,
@@ -143,6 +148,12 @@ class TovaOrchestrator:
             ):
                 # Each chunk is clean text content
                 if chunk:
+                    if first_chunk:
+                        first_chunk = False
+                        gen_t1 = time.perf_counter()
+                        self.logger.info(
+                            f"🔍 Orchestrator: First token after {(gen_t1 - gen_t0)*1000:.1f}ms"
+                        )
                     self.logger.info(f"🔍 Orchestrator: Got chunk from Mixtral: {chunk[:50]}...")
                     yield chunk
         else:

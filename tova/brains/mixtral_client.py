@@ -65,9 +65,25 @@ class MixtralClient(BaseBrainClient):
                         yield f"HTTP {response.status_code}: {await response.aread()}"
                         return
 
+                    first_line = True
+                    start_t = None
+                    try:
+                        import time as _time
+                        start_t = _time.perf_counter()
+                    except Exception:
+                        start_t = None
+
                     async for raw_line in response.aiter_lines():
                         if not raw_line:
                             continue
+                        if first_line and start_t is not None:
+                            first_line = False
+                            try:
+                                import time as _time
+                                dt_ms = (_time.perf_counter() - start_t) * 1000
+                                self.logger.info(f"🎭 MixtralClient: first stream line in {dt_ms:.1f}ms")
+                            except Exception:
+                                pass
                         line = raw_line.strip()
                         # Handle SSE prefix if present
                         if line.startswith("data: "):
