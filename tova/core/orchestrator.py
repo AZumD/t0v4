@@ -3,6 +3,7 @@ from typing import Dict, Any, Optional, AsyncGenerator, List
 import asyncio
 import logging
 import uuid
+import time
 from ..brains.mixtral_client import MixtralClient
 from ..brains.phi_client import PhiClient
 from .prompt_stitcher import PromptStitcher
@@ -23,14 +24,35 @@ class TovaOrchestrator:
         self.active_function = None
         self.conversation_context = []
         self.active_conversations = {}  # conversation_id -> metadata
+
+        # Cached health checks to avoid per-message latency
+        self._health_cache: Dict[str, Any] = {
+            "mixtral": {"ok": None, "ts": 0.0},
+            "phi": {"ok": None, "ts": 0.0},
+        }
+        self._health_ttl_seconds = 5.0
+    
+    async def _get_health(self) -> Dict[str, bool]:
+        now = time.time()
+        cached_mixtral = self._health_cache["mixtral"]
+        cached_phi = self._health_cache["phi"]
+
+        if cached_mixtral["ok"] is None or now - cached_mixtral["ts"] > self._health_ttl_seconds:
+            cached_mixtral["ok"] = await self.mixtral.health_check()
+            cached_mixtral["ts"] = now
+        if cached_phi["ok"] is None or now - cached_phi["ts"] > self._health_ttl_seconds:
+            cached_phi["ok"] = await self.phi.health_check()
+            cached_phi["ts"] = now
+        return {"mixtral": cached_mixtral["ok"], "phi": cached_phi["ok"]}
     
     async def initialize(self) -> bool:
         """Initialize both brains and verify connectivity"""
         self.logger.info("Initializing TOVA Orchestrator...")
         
         # Check both brains are online (but don't fail if they're not)
-        mixtral_ok = await self.mixtral.health_check()
-        phi_ok = await self.phi.health_check()
+        health = await self._get_health()
+        mixtral_ok = health["mixtral"]
+        phi_ok = health["phi"]
         
         if not mixtral_ok:
             self.logger.warning("⚠️  Mixtral brain not responding - will retry on first use")
@@ -78,9 +100,10 @@ class TovaOrchestrator:
         
         self.logger.info(f"🔍 Orchestrator: Processing message: {message[:50]}...")
         
-        # Check if brains are available
-        mixtral_ok = await self.mixtral.health_check()
-        phi_ok = await self.phi.health_check()
+        # Cached health to reduce first-token latency
+        health = await self._get_health()
+        mixtral_ok = health["mixtral"]
+        phi_ok = health["phi"]
         
         self.logger.info(f"🔍 Orchestrator: Brain status - Mixtral: {mixtral_ok}, Phi: {phi_ok}")
         
@@ -116,10 +139,12 @@ class TovaOrchestrator:
             async for chunk in self.mixtral.generate_response(
                 prompt=user_message,
                 system_prompt=system_prompt,
-                stream=False
+                stream=True
             ):
-                self.logger.info(f"🔍 Orchestrator: Got chunk from Mixtral: {chunk[:50]}...")
-                yield chunk
+                # Each chunk is clean text content
+                if chunk:
+                    self.logger.info(f"🔍 Orchestrator: Got chunk from Mixtral: {chunk[:50]}...")
+                    yield chunk
         else:
             # Mixtral offline - provide fallback response
             self.logger.info("🔍 Orchestrator: Mixtral offline, using fallback response")

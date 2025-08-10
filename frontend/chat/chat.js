@@ -78,6 +78,8 @@ class AvatarManager {
     playDuringResponse() {
         if (!this.isPlaying && this.video) {
             this.isPlaying = true;
+            // Ensure the avatar loops continuously while streaming
+            this.video.loop = true;
             this.video.currentTime = 0;
             this.video.play().catch(e => {
                 console.error('Video play failed:', e);
@@ -88,6 +90,10 @@ class AvatarManager {
     
     stopAfterResponse() {
         this.isPlaying = false;
+        // Disable looping when the response finishes
+        if (this.video) {
+            this.video.loop = false;
+        }
         this.freezeOnFirstFrame();
     }
     
@@ -102,6 +108,10 @@ class AvatarManager {
         if (!this.video) return;
         
         this.video.addEventListener('ended', () => {
+            // If looping is enabled during streaming, do not freeze on end
+            if (this.video && this.video.loop) {
+                return;
+            }
             this.isPlaying = false;
             this.freezeOnFirstFrame();
         });
