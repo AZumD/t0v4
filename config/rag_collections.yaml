@@ -1,0 +1,11 @@
+collections:
+  - name: conversation_history
+    description: Compressed conversation segments
+  - name: user_preferences
+    description: Extracted preferences and patterns
+  - name: important_events
+    description: Key moments and decisions
+  - name: context_threads
+    description: Ongoing conversation threads
+  - name: personality_memory
+    description: How user likes to be talked to 

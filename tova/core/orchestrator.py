@@ -12,8 +12,8 @@ from ..memory.conversation_store import ConversationStore
 class TovaOrchestrator:
     def __init__(self):
         self.mixtral = MixtralClient()
-        # Temporarily use Mixtral for both roles since Phi model doesn't work with this llama.cpp version
-        self.phi = MixtralClient(base_url="http://localhost:8000")
+        # Use dedicated Phi client at port 8001
+        self.phi = PhiClient(base_url="http://localhost:8001")
         self.prompt_stitcher = PromptStitcher()
         self.conversation_store = ConversationStore()
         self.logger = logging.getLogger(__name__)

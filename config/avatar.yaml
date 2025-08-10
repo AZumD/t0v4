@@ -1,0 +1,6 @@
+default_clip: "assets/avatar/tova_default.mp4"
+loop_during_streaming: true
+future_clips:
+  excited: "assets/avatar/tova_excited.mp4"
+  thinking: "assets/avatar/tova_thinking.mp4"
+  sleepy: "assets/avatar/tova_sleepy.mp4" 
