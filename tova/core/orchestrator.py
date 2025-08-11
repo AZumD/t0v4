@@ -30,7 +30,7 @@ class TovaOrchestrator:
             "mixtral": {"ok": None, "ts": 0.0},
             "phi": {"ok": None, "ts": 0.0},
         }
-        self._health_ttl_seconds = 5.0
+        self._health_ttl_seconds = 30.0
     
     async def _get_health(self) -> Dict[str, bool]:
         now = time.time()
@@ -114,7 +114,7 @@ class TovaOrchestrator:
             yield fallback_response
             return
         
-        # 1. Background analysis with Phi (async) - TEMPORARILY DISABLED
+        # 1. Background analysis with Phi (async) - DISABLED FOR PERFORMANCE
         phi_task = None
         # if phi_ok:
         #     self.logger.info("🔍 Orchestrator: Starting Phi background analysis")
@@ -124,6 +124,7 @@ class TovaOrchestrator:
         
         # 2. Build dynamic prompt
         self.logger.info("🔍 Orchestrator: Building dynamic prompt")
+        self.logger.info(f"🔍 Orchestrator: Starting prompt build at {time.perf_counter():.3f}")
         build_t0 = time.perf_counter()
         system_prompt, user_message = await self.prompt_stitcher.build_prompt(
             message=message,
@@ -135,6 +136,7 @@ class TovaOrchestrator:
         self.logger.info(
             f"🔍 Orchestrator: Built prompts in {(build_t1 - build_t0)*1000:.1f}ms; system[{len(system_prompt)}], user[{len(user_message)}]"
         )
+        self.logger.info(f"🔍 Orchestrator: Prompt built, sending to Mixtral at {time.perf_counter():.3f}")
         
         # 3. Generate response with Mixtral (streaming) - only if available
         if mixtral_ok:
