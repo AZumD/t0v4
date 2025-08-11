@@ -30,7 +30,8 @@ class TovaOrchestrator:
             "mixtral": {"ok": None, "ts": 0.0},
             "phi": {"ok": None, "ts": 0.0},
         }
-        self._health_ttl_seconds = 5.0
+        # Increase TTL to reduce health checking frequency aggressively
+        self._health_ttl_seconds = 60.0
     
     async def _get_health(self) -> Dict[str, bool]:
         now = time.time()
@@ -105,25 +106,21 @@ class TovaOrchestrator:
         mixtral_ok = health["mixtral"]
         phi_ok = health["phi"]
         
-        self.logger.info(f"🔍 Orchestrator: Brain status - Mixtral: {mixtral_ok}, Phi: {phi_ok}")
-        
-        if not mixtral_ok and not phi_ok:
-            # Both brains offline - provide fallback response
-            self.logger.info("🔍 Orchestrator: Both brains offline, using fallback response")
+        # If Mixtral is offline, we cannot answer; return fallback immediately
+        if not mixtral_ok:
+            self.logger.info("🔍 Orchestrator: Mixtral offline, using fallback response")
             fallback_response = self._generate_fallback_response(message)
             yield fallback_response
             return
-        
-        # 1. Background analysis with Phi (async) - TEMPORARILY DISABLED
-        phi_task = None
-        # if phi_ok:
-        #     self.logger.info("🔍 Orchestrator: Starting Phi background analysis")
-        #     phi_task = asyncio.create_task(
-        #         self._background_analysis(message, user_context)
-        #     )
+
+        # Fire-and-forget Phi analysis (non-blocking); do not await or store task
+        if phi_ok:
+            asyncio.create_task(self._background_analysis_silent(message, user_context))
+            self.logger.info("🔍 Phi task fired (non-blocking)")
         
         # 2. Build dynamic prompt
         self.logger.info("🔍 Orchestrator: Building dynamic prompt")
+        self.logger.info(f"🔍 Orchestrator: Starting prompt build at {time.perf_counter():.3f}")
         build_t0 = time.perf_counter()
         system_prompt, user_message = await self.prompt_stitcher.build_prompt(
             message=message,
@@ -135,42 +132,27 @@ class TovaOrchestrator:
         self.logger.info(
             f"🔍 Orchestrator: Built prompts in {(build_t1 - build_t0)*1000:.1f}ms; system[{len(system_prompt)}], user[{len(user_message)}]"
         )
+        self.logger.info(f"🔍 Orchestrator: Prompt built, sending to Mixtral at {time.perf_counter():.3f}")
         
-        # 3. Generate response with Mixtral (streaming) - only if available
-        if mixtral_ok:
-            self.logger.info("🔍 Orchestrator: Starting Mixtral response generation")
-            first_chunk = True
-            gen_t0 = time.perf_counter()
-            async for chunk in self.mixtral.generate_response(
-                prompt=user_message,
-                system_prompt=system_prompt,
-                stream=True
-            ):
-                # Each chunk is clean text content
-                if chunk:
-                    if first_chunk:
-                        first_chunk = False
-                        gen_t1 = time.perf_counter()
-                        self.logger.info(
-                            f"🔍 Orchestrator: First token after {(gen_t1 - gen_t0)*1000:.1f}ms"
-                        )
-                    self.logger.info(f"🔍 Orchestrator: Got chunk from Mixtral: {chunk[:50]}...")
-                    yield chunk
-        else:
-            # Mixtral offline - provide fallback response
-            self.logger.info("🔍 Orchestrator: Mixtral offline, using fallback response")
-            fallback_response = self._generate_fallback_response(message)
-            yield fallback_response
-        
-        # 4. Wait for Phi analysis to complete (if it was started) - DISABLED
-        # if phi_task:
-        #     try:
-        #         self.logger.info("🔍 Orchestrator: Waiting for Phi analysis to complete")
-        #         analysis = await phi_task
-        #         await self._process_background_analysis(analysis)
-        #         self.logger.info("🔍 Orchestrator: Phi analysis completed")
-        #     except Exception as e:
-        #         self.logger.warning(f"🔍 Orchestrator: Phi analysis failed: {e}")
+        # 3. Generate response with Mixtral (streaming)
+        self.logger.info("🔍 Orchestrator: Starting Mixtral response generation")
+        first_chunk = True
+        gen_t0 = time.perf_counter()
+        async for chunk in self.mixtral.generate_response(
+            prompt=user_message,
+            system_prompt=system_prompt,
+            stream=True
+        ):
+            # Each chunk is clean text content
+            if chunk:
+                if first_chunk:
+                    first_chunk = False
+                    gen_t1 = time.perf_counter()
+                    self.logger.info(
+                        f"🔍 Orchestrator: First token after {(gen_t1 - gen_t0)*1000:.1f}ms"
+                    )
+                self.logger.info(f"🔍 Orchestrator: Got chunk from Mixtral: {chunk[:50]}...")
+                yield chunk
         
         self.logger.info("🔍 Orchestrator: Message processing completed")
     
@@ -253,6 +235,14 @@ class TovaOrchestrator:
             "preferences": results[1] if not isinstance(results[1], Exception) else "",
             "importance": results[2] if not isinstance(results[2], Exception) else "0.5"
         }
+
+    async def _background_analysis_silent(self, message: str, context: Optional[Dict]):
+        """Completely non-blocking Phi analysis - fire and forget"""
+        try:
+            analysis = await self._background_analysis(message, context)
+            await self._process_background_analysis(analysis)
+        except Exception as e:
+            self.logger.debug(f"Phi background task failed (ignored): {e}")
     
     async def _process_background_analysis(self, analysis: Dict[str, Any]):
         """Process Phi's background analysis results"""

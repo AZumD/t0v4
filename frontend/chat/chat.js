@@ -77,23 +77,22 @@ class AvatarManager {
     
     playDuringResponse() {
         if (!this.video) return;
-        // Ensure the avatar loops continuously while streaming
+        
+        // Set to loop immediately
         this.video.loop = true;
-
-        // If the video is already playing, do not reset time; keep playing seamlessly
+        
+        // If already playing smoothly, don't interrupt
         if (this.isPlaying && !this.video.paused) {
             return;
         }
-
-        // Start playing only if paused/stopped, without forcing a seek to 0
-        this.video.play()
-            .then(() => {
-                this.isPlaying = true;
-            })
-            .catch(e => {
-                console.error('Video play failed:', e);
-                this.isPlaying = false;
-            });
+        
+        // Start from current position without resetting to 0
+        // This prevents the full loop before streaming
+        this.isPlaying = true;
+        this.video.play().catch(e => {
+            console.error('Video play failed:', e);
+            this.isPlaying = false;
+        });
     }
     
     stopAfterResponse() {
@@ -279,13 +278,15 @@ class TovaInterface {
         switch (data.type) {
             case 'typing':
                 console.log('🔍 Typing indicator:', data.status);
-                if (data.status === 'started') {
-                    avatarManager.playDuringResponse();
-                }
+                // Don't start avatar here - wait for first chunk
                 break;
                 
             case 'response_chunk':
                 console.log('🔍 Response chunk:', data.content);
+                // Start avatar on first chunk if not already playing
+                if (!this.streamingMessage) {
+                    avatarManager.playDuringResponse();
+                }
                 this.updateTovaMessage(data.content, data.metadata);
                 break;
                 
