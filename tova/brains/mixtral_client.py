@@ -40,6 +40,8 @@ class MixtralClient(BaseBrainClient):
                 "n_predict": kwargs.get("max_tokens", 1000),
                 "temperature": kwargs.get("temperature", 0.7),
                 "stream": use_streaming,
+                # Hint llama.cpp to cache the prompt prefix to speed up subsequent calls
+                "cache_prompt": True,
                 # Be permissive about stop tokens for chatml
                 "stop": kwargs.get("stop", ["<|im_end|>", "</s>"])
             }
