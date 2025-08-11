@@ -72,6 +72,9 @@ async def websocket_chat(websocket: WebSocket):
     # Initialize conversation for this connection
     user_id = "default_user"  # TODO: Implement user authentication
     conversation_id = await orchestrator.start_conversation(user_id)
+
+    # Kick off a warmup in the background to prime KV cache for first token latency
+    asyncio.create_task(orchestrator.warmup_prefix())
     
     try:
         while True:

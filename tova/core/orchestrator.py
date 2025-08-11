@@ -90,6 +90,32 @@ class TovaOrchestrator:
         
         self.logger.info(f"Started new conversation {conversation_id} for user {user_id}")
         return conversation_id
+
+    async def warmup_prefix(self) -> None:
+        """Non-blocking warmup to prime Mixtral KV cache with current system prompt."""
+        try:
+            health = await self._get_health()
+            if not health.get("mixtral"):
+                return
+            # Build prompt with empty user message to cache system/preamble
+            system_prompt, user_message = await self.prompt_stitcher.build_prompt(
+                message="",
+                mood=self.current_mood,
+                function=self.active_function,
+                context=None,
+            )
+            # Fire a tiny non-streaming generation to warm cache; discard output
+            async for _ in self.mixtral.generate_response(
+                prompt=user_message or "",
+                system_prompt=system_prompt,
+                stream=False,
+                max_tokens=1,
+                n_keep=1024,
+            ):
+                break
+            self.logger.info("🔧 Warmup complete (primed KV cache)")
+        except Exception as e:
+            self.logger.debug(f"Warmup skipped: {e}")
     
     async def process_user_message(
         self, 
