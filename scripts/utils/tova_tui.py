@@ -29,7 +29,7 @@ try:
     from rich import box
 except ImportError:
     print("Installing required package: rich")
-    subprocess.run([sys.executable, "-m", "pip", "install", "rich"])
+    subprocess.run([sys.executable, "-m", "pip", "install", "rich"])  # nosec - CLI utility install
     from rich.console import Console
     from rich.layout import Layout
     from rich.panel import Panel
@@ -149,7 +149,7 @@ class TovaTUI:
             )
             if result.returncode == 0 and result.stdout:
                 return ServiceStatus.RUNNING
-        except:
+        except Exception:
             pass
         
         service.pid = None
