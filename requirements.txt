@@ -5,3 +5,4 @@ chromadb
 redis
 pyyaml
 httpx 
+rich
