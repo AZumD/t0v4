@@ -29,7 +29,7 @@ try:
     from rich import box
 except ImportError:
     print("Installing required package: rich")
-    subprocess.run([sys.executable, "-m", "pip", "install", "rich"]) 
+    subprocess.run([sys.executable, "-m", "pip", "install", "rich"])
     from rich.console import Console
     from rich.layout import Layout
     from rich.panel import Panel
