@@ -42,6 +42,8 @@ class MixtralClient(BaseBrainClient):
                 "stream": use_streaming,
                 # Hint llama.cpp to cache the prompt prefix to speed up subsequent calls
                 "cache_prompt": True,
+                # Keep a portion of the prompt cached between requests (system + assistant prefix)
+                "n_keep": kwargs.get("n_keep", 512),
                 # Be permissive about stop tokens for chatml
                 "stop": kwargs.get("stop", ["<|im_end|>", "</s>"])
             }
