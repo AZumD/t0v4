@@ -88,11 +88,11 @@ class AvatarManager {
         
         // Start from current position without resetting to 0
         // This prevents the full loop before streaming
-        this.isPlaying = true;
-        this.video.play().catch(e => {
-            console.error('Video play failed:', e);
-            this.isPlaying = false;
-        });
+            this.isPlaying = true;
+            this.video.play().catch(e => {
+                console.error('Video play failed:', e);
+                this.isPlaying = false;
+            });
     }
     
     stopAfterResponse() {

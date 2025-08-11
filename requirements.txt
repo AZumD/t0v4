@@ -2,7 +2,8 @@ fastapi
 uvicorn
 websockets
 chromadb
-redis
+sentence-transformers
+redis[hiredis]
 pyyaml
 httpx 
 rich

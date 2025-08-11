@@ -15,15 +15,18 @@ if [ -f "$HOME/.venvs/mistralvenv/bin/activate" ]; then
     source "$HOME/.venvs/mistralvenv/bin/activate"
 fi
 
-# Resolve Mixtral base URL (prefer Tailscale IPv4)
+# Resolve Mixtral & Phi base URLs (prefer Tailscale IPv4)
 TSIP=$(tailscale ip -4 2>/dev/null | head -n1 || true)
 if [ -n "$TSIP" ]; then
   export MIXTRAL_BASE_URL="http://$TSIP:8000"
+  export PHI_BASE_URL="http://$TSIP:8001"
 else
   export MIXTRAL_BASE_URL="http://127.0.0.1:8000"
+  export PHI_BASE_URL="http://127.0.0.1:8001"
 fi
 
 echo "Using MIXTRAL_BASE_URL=$MIXTRAL_BASE_URL"
+echo "Using PHI_BASE_URL=$PHI_BASE_URL"
 
 # Start TOVA Core FastAPI application
 uvicorn tova.main:app \

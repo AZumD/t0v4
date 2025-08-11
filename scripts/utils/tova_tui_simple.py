@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TOVA v4 Terminal User Interface - System Management & Monitoring"""
+"""TOVA v4 Simple TUI - Uses console.input() for better compatibility"""
 
 import asyncio
 import subprocess
@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from enum import Enum
 from collections import deque
 import threading
-import queue
 import requests
 import json
 
@@ -27,6 +26,7 @@ try:
     from rich.text import Text
     from rich.align import Align
     from rich import box
+    from rich.prompt import Prompt
 except ImportError:
     print("Installing required package: rich")
     subprocess.run([sys.executable, "-m", "pip", "install", "rich"])  # nosec - CLI utility install
@@ -38,6 +38,7 @@ except ImportError:
     from rich.text import Text
     from rich.align import Align
     from rich import box
+    from rich.prompt import Prompt
 
 console = Console()
 
@@ -69,7 +70,7 @@ class Service:
         if self.log_buffer is None:
             self.log_buffer = deque(maxlen=100)
 
-class TovaTUI:
+class TovaTUISimple:
     def __init__(self):
         self.project_root = Path("/home/anthon/t0v4")
         self.log_path = self.project_root / "data" / "logs"
@@ -118,7 +119,6 @@ class TovaTUI:
         self.running = True
         self.layout = Layout()
         self.combined_logs = deque(maxlen=100)
-        self.command_queue = queue.Queue()
         self.setup_layout()
         self.start_log_monitoring()
         
@@ -509,97 +509,59 @@ class TovaTUI:
         
         return self.layout
     
-    def input_thread(self):
-        """Handle input in a separate thread without any terminal mode changes"""
+    def show_menu(self):
+        """Show the main menu and handle user input"""
         while self.running:
+            # Clear screen and show current status
+            console.clear()
+            console.print(self.render())
+            
+            # Show command prompt
+            console.print("\n[yellow]Enter command (j/k/s/x/r/a/kk/q):[/yellow] ", end="")
+            
             try:
-                # Use simple input() - this is the safest approach
-                # Arrow keys won't work, but J/K navigation will
-                cmd = input()
-                if cmd.strip():
-                    self.command_queue.put(cmd.strip().lower())
-            except (EOFError, KeyboardInterrupt):
-                self.running = False
-                break
-            except Exception:
-                # Ignore other input errors
-                pass
-    
-    async def process_commands(self):
-        """Process commands from the input queue"""
-        while self.running:
-            try:
-                # Check for commands without blocking
-                try:
-                    cmd = self.command_queue.get_nowait()
-                except queue.Empty:
-                    await asyncio.sleep(0.1)
-                    continue
+                cmd = input().strip().lower()
                 
-                # Process the command
                 if cmd == 'q':
                     self.running = False
-                elif cmd == 'k':  # vim-style up
+                elif cmd == 'k':
                     self.selected_service = max(0, self.selected_service - 1)
-                elif cmd == 'j':  # vim-style down
+                elif cmd == 'j':
                     self.selected_service = min(len(self.services) - 1, 
                                                self.selected_service + 1)
                 elif cmd == 's':
                     service_name = self.service_list[self.selected_service]
-                    await self.start_service(service_name)
+                    asyncio.run(self.start_service(service_name))
                 elif cmd == 'x':
                     service_name = self.service_list[self.selected_service]
-                    await self.stop_service(service_name)
+                    asyncio.run(self.stop_service(service_name))
                 elif cmd == 'r':
                     service_name = self.service_list[self.selected_service]
-                    await self.restart_service(service_name)
+                    asyncio.run(self.restart_service(service_name))
                 elif cmd == 'a':
-                    await self.start_all_services()
-                elif cmd == 'kk':  # Double 'k' for kill all
-                    await self.stop_all_services()
-                
-            except Exception as e:
-                self.combined_logs.append(f"[red]Command error: {e}[/red]")
-    
-    async def run(self):
-        """Main TUI loop with clean input handling"""
-        # Start input thread
-        input_thread = threading.Thread(target=self.input_thread, daemon=True)
-        input_thread.start()
-        
-        # Start command processor
-        command_task = asyncio.create_task(self.process_commands())
-        
-        with Live(self.render(), refresh_per_second=1, console=console, screen=True) as live:
-            try:
-                while self.running:
-                    live.update(self.render())
-                    await asyncio.sleep(1)  # Slower refresh to reduce flicker
+                    asyncio.run(self.start_all_services())
+                elif cmd == 'kk':
+                    asyncio.run(self.stop_all_services())
+                elif cmd:
+                    console.print(f"[red]Unknown command: {cmd}[/red]")
+                    input("Press Enter to continue...")
+                    
             except KeyboardInterrupt:
                 self.running = False
-        
-        # Clean up
-        command_task.cancel()
-        try:
-            await command_task
-        except asyncio.CancelledError:
-            pass
-        
-        # Stop log monitoring
-        for service in self.services.values():
-            if service.log_process:
-                service.log_process.terminate()
+            except Exception as e:
+                console.print(f"[red]Error: {e}[/red]")
+                input("Press Enter to continue...")
 
 async def main():
     """Main entry point"""
-    tui = TovaTUI()
+    tui = TovaTUISimple()
     
     try:
-        await tui.run()
+        tui.show_menu()
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]")
     finally:
         console.print("\n[yellow]✨ TOVA TUI shutdown complete[/yellow]")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main()) 

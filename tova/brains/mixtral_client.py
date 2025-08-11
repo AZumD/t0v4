@@ -10,7 +10,7 @@ from .base_client import BaseBrainClient
 class MixtralClient(BaseBrainClient):
     def __init__(self, base_url: str = None):
         if base_url is None:
-            base_url = os.getenv("MIXTRAL_BASE_URL", "http://localhost:8000")
+            base_url = os.getenv("MIXTRAL_BASE_URL", "http://100.75.248.22:8000")
         super().__init__(base_url)
         self.model_name = "mixtral"
         self.logger = logging.getLogger(__name__)
@@ -128,15 +128,15 @@ class MixtralClient(BaseBrainClient):
             else:
                 # Non-streaming: single JSON response
                 headers = common_headers
-                response = await self.client.post(
-                    f"{self.base_url}/completion",
-                    json=payload,
-                    headers=headers,
+            response = await self.client.post(
+                f"{self.base_url}/completion",
+                json=payload,
+                headers=headers,
                     timeout=self.request_timeout_seconds,
-                )
-                if response.status_code != 200:
-                    yield f"HTTP {response.status_code}: {response.text}"
-                    return
+            )
+            if response.status_code != 200:
+                yield f"HTTP {response.status_code}: {response.text}"
+                return
                 try:
                     data = response.json()
                     content = data.get("content") or data.get("response") or response.text
@@ -145,15 +145,26 @@ class MixtralClient(BaseBrainClient):
                     content = response.text
                 if content:
                     yield content
-                else:
-                    yield "Empty response from server"
+            else:
+                yield "Empty response from server"
         except Exception as e:
             self.logger.error(f"🎭 Unexpected error: {type(e).__name__}: {str(e)}")
             yield f"Error: {type(e).__name__}: {str(e)}"
 
     async def health_check(self) -> bool:
         try:
-            # POST a tiny prompt to /completion
+            # Try /v1/models first (OpenAI-compatible endpoint)
+            try:
+                response = await self.client.get(
+                    f"{self.base_url}/v1/models",
+                    timeout=10.0
+                )
+                if response.status_code == 200:
+                    return True
+            except Exception:
+                pass
+            
+            # Fallback to /completion endpoint
             response = await self.client.post(
                 f"{self.base_url}/completion",
                 json={"prompt": "ping", "n_predict": 1, "stream": False},

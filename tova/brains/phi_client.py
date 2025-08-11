@@ -1,11 +1,14 @@
 """Phi brain client for background analysis and processing"""
 from typing import Dict, Any, Optional, AsyncGenerator
 import logging
+import os
 from .base_client import BaseBrainClient
 
 
 class PhiClient(BaseBrainClient):
-    def __init__(self, base_url: str = "http://localhost:8001"):
+    def __init__(self, base_url: str = None):
+        if base_url is None:
+            base_url = os.getenv("PHI_BASE_URL", "http://localhost:8001")
         super().__init__(base_url)
         self.model_name = "phi"
         self.logger = logging.getLogger(__name__)

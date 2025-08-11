@@ -8,15 +8,22 @@ from ..brains.mixtral_client import MixtralClient
 from ..brains.phi_client import PhiClient
 from .prompt_stitcher import PromptStitcher
 from ..memory.conversation_store import ConversationStore
+from ..memory.rag_service import RAGService
+from ..memory.redis_cache import RedisCache
 
 
 class TovaOrchestrator:
     def __init__(self):
         self.mixtral = MixtralClient()
-        # Use dedicated Phi client at port 8001
-        self.phi = PhiClient(base_url="http://localhost:8001")
+        # Phi client (env-driven)
+        self.phi = PhiClient()
         self.prompt_stitcher = PromptStitcher()
         self.conversation_store = ConversationStore()
+        
+        # Initialize memory systems
+        self.rag = RAGService()
+        self.cache = RedisCache()
+        
         self.logger = logging.getLogger(__name__)
         
         # State tracking
@@ -182,8 +189,8 @@ class TovaOrchestrator:
                         self.logger.info(
                             f"🔍 Orchestrator: First token after {(gen_t1 - gen_t0)*1000:.1f}ms"
                         )
-                    self.logger.info(f"🔍 Orchestrator: Got chunk from Mixtral: {chunk[:50]}...")
-                    yield chunk
+                self.logger.info(f"🔍 Orchestrator: Got chunk from Mixtral: {chunk[:50]}...")
+                yield chunk
         else:
             # Mixtral offline - provide fallback response
             self.logger.info("🔍 Orchestrator: Mixtral offline, using fallback response")
@@ -208,7 +215,12 @@ class TovaOrchestrator:
         message: str,
         user_context: Optional[Dict] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Process user message with conversation persistence"""
+        """Process user message with conversation persistence and memory integration"""
+        
+        # Get user_id from conversation metadata
+        user_id = "default"
+        if conversation_id in self.active_conversations:
+            user_id = self.active_conversations[conversation_id].get("user_id", "default")
         
         # Store user message
         await self.conversation_store.store_message(
@@ -222,10 +234,28 @@ class TovaOrchestrator:
             conversation_id=conversation_id
         )
         
-        # Add conversation history to context
+        # Get RAG context for enhanced memory
+        rag_context = []
+        if self.rag.enabled:
+            rag_context = await self.rag.get_conversation_context(
+                user_id=user_id,
+                query=message,
+                limit=3
+            )
+        
+        # Check cache for recent context
+        cached_context = None
+        if self.cache.enabled:
+            cached_context = await self.cache.get_conversation_chunk(
+                conversation_id, 
+                chunk_index=0
+            )
+        
+        # Add to enhanced_context
         enhanced_context = {
             **(user_context or {}),
-            "conversation_history": conversation_history[-10:],  # Last 10 messages
+            "conversation_history": cached_context or conversation_history[-10:],
+            "rag_memories": rag_context,
             "conversation_id": conversation_id
         }
         
@@ -255,6 +285,30 @@ class TovaOrchestrator:
             tokens_used=metadata.get("tokens_used"),
             processing_time_ms=metadata.get("processing_time_ms")
         )
+        
+        # Extract insights to RAG (background task)
+        if response_content and self.rag.enabled:
+            asyncio.create_task(
+                self._extract_conversation_insights(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message=message,
+                    response_content=response_content
+                )
+            )
+        
+        # Cache conversation chunk for fast retrieval
+        if self.cache.enabled:
+            asyncio.create_task(
+                self.cache.cache_conversation_chunk(
+                    conversation_id=conversation_id,
+                    chunk_index=0,
+                    messages=conversation_history[-10:] + [
+                        {"role": "user", "content": message},
+                        {"role": "tova", "content": response_content}
+                    ]
+                )
+            )
         
         # Update conversation metadata
         if conversation_id in self.active_conversations:
@@ -287,6 +341,34 @@ class TovaOrchestrator:
         # TODO: Store in RAG, update user preferences, etc.
         self.logger.info(f"Background analysis: {analysis}")
     
+    async def _extract_conversation_insights(
+        self,
+        user_id: str,
+        conversation_id: str,
+        message: str,
+        response_content: str
+    ):
+        """Extract insights from conversation and store in RAG"""
+        try:
+            if not self.rag.enabled:
+                return
+            
+            # Extract insights using RAG service
+            insights = await self.rag.extract_conversation_insights(
+                messages=[
+                    {"role": "user", "content": message},
+                    {"role": "tova", "content": response_content}
+                ],
+                user_id=user_id,
+                conversation_id=conversation_id,
+                phi_client=self.phi if self.phi else None
+            )
+            
+            self.logger.debug(f"Extracted insights for {user_id}: {insights}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to extract conversation insights: {e}")
+    
     async def get_conversation_history(self, conversation_id: str) -> List[Dict[str, Any]]:
         """Get conversation history"""
         return await self.conversation_store.get_conversation_history(conversation_id)
@@ -296,9 +378,10 @@ class TovaOrchestrator:
         return await self.conversation_store.get_recent_conversations(user_id, limit)
     
     async def shutdown(self):
-        """Clean shutdown of both brains"""
+        """Clean shutdown of both brains and memory systems"""
         await self.mixtral.close()
         await self.phi.close()
+        await self.cache.close()
         self.logger.info("TOVA Orchestrator shutdown complete") 
 
     def _generate_fallback_response(self, message: str) -> str:

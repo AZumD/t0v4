@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TOVA v4 Terminal User Interface - System Management & Monitoring"""
+"""TOVA v4 Menu-Driven TUI - Simple and reliable"""
 
 import asyncio
 import subprocess
@@ -14,16 +14,13 @@ from dataclasses import dataclass
 from enum import Enum
 from collections import deque
 import threading
-import queue
 import requests
 import json
 
 try:
     from rich.console import Console
-    from rich.layout import Layout
     from rich.panel import Panel
     from rich.table import Table
-    from rich.live import Live
     from rich.text import Text
     from rich.align import Align
     from rich import box
@@ -31,10 +28,8 @@ except ImportError:
     print("Installing required package: rich")
     subprocess.run([sys.executable, "-m", "pip", "install", "rich"])  # nosec - CLI utility install
     from rich.console import Console
-    from rich.layout import Layout
     from rich.panel import Panel
     from rich.table import Table
-    from rich.live import Live
     from rich.text import Text
     from rich.align import Align
     from rich import box
@@ -69,7 +64,7 @@ class Service:
         if self.log_buffer is None:
             self.log_buffer = deque(maxlen=100)
 
-class TovaTUI:
+class TovaTUIMenu:
     def __init__(self):
         self.project_root = Path("/home/anthon/t0v4")
         self.log_path = self.project_root / "data" / "logs"
@@ -112,29 +107,11 @@ class TovaTUI:
             )
         }
         
-        self.selected_service = 0
         self.service_list = list(self.services.keys())
-        self.log_tail_lines = 30
         self.running = True
-        self.layout = Layout()
         self.combined_logs = deque(maxlen=100)
-        self.command_queue = queue.Queue()
-        self.setup_layout()
         self.start_log_monitoring()
         
-    def setup_layout(self):
-        """Setup the TUI layout"""
-        self.layout.split_column(
-            Layout(name="header", size=3),
-            Layout(name="main"),
-            Layout(name="footer", size=4)
-        )
-        
-        self.layout["main"].split_row(
-            Layout(name="services", ratio=1),
-            Layout(name="logs", ratio=2)
-        )
-    
     def check_script_exists(self, script_path: str) -> bool:
         """Check if start script exists and is executable"""
         path = Path(script_path)
@@ -290,16 +267,16 @@ class TovaTUI:
         
         # Check if script exists
         if not self.check_script_exists(service.start_script):
-            self.combined_logs.append(f"[red]✗ Start script not found: {service.start_script}[/red]")
+            console.print(f"[red]✗ Start script not found: {service.start_script}[/red]")
             service.status = ServiceStatus.ERROR
             return
         
         if service.status == ServiceStatus.RUNNING:
-            self.combined_logs.append(f"[yellow]⚠ {service.display_name} is already running[/yellow]")
+            console.print(f"[yellow]⚠ {service.display_name} is already running[/yellow]")
             return
         
         service.status = ServiceStatus.STARTING
-        self.combined_logs.append(f"[green]▶ Starting {service.display_name}...[/green]")
+        console.print(f"[green]▶ Starting {service.display_name}...[/green]")
         
         try:
             # Run start command
@@ -318,29 +295,29 @@ class TovaTUI:
                 # Check if it actually started
                 service.status = self.check_service_status(service)
                 if service.status == ServiceStatus.RUNNING:
-                    self.combined_logs.append(f"[green]✓ {service.display_name} started successfully[/green]")
+                    console.print(f"[green]✓ {service.display_name} started successfully[/green]")
                     return
                 elif service.status == ServiceStatus.ERROR:
                     break
             
             # If we get here, service failed to start
-            self.combined_logs.append(f"[red]✗ {service.display_name} failed to start after {max_attempts} attempts[/red]")
+            console.print(f"[red]✗ {service.display_name} failed to start after {max_attempts} attempts[/red]")
             service.status = ServiceStatus.ERROR
             
         except Exception as e:
             service.status = ServiceStatus.ERROR
-            self.combined_logs.append(f"[red]✗ Failed to start {service_name}: {e}[/red]")
+            console.print(f"[red]✗ Failed to start {service_name}: {e}[/red]")
     
     async def stop_service(self, service_name: str):
         """Stop a service with proper cleanup"""
         service = self.services[service_name]
         
         if service.status not in [ServiceStatus.RUNNING, ServiceStatus.STARTING]:
-            self.combined_logs.append(f"[yellow]⚠ {service.display_name} is not running[/yellow]")
+            console.print(f"[yellow]⚠ {service.display_name} is not running[/yellow]")
             return
         
         service.status = ServiceStatus.STOPPING
-        self.combined_logs.append(f"[yellow]■ Stopping {service.display_name}...[/yellow]")
+        console.print(f"[yellow]■ Stopping {service.display_name}...[/yellow]")
         
         try:
             # Try PID file first
@@ -383,223 +360,160 @@ class TovaTUI:
             
             service.status = ServiceStatus.STOPPED
             service.pid = None
-            self.combined_logs.append(f"[green]✓ {service.display_name} stopped[/green]")
+            console.print(f"[green]✓ {service.display_name} stopped[/green]")
             
         except Exception as e:
             service.status = ServiceStatus.ERROR
-            self.combined_logs.append(f"[red]✗ Failed to stop {service_name}: {e}[/red]")
+            console.print(f"[red]✗ Failed to stop {service_name}: {e}[/red]")
     
     async def restart_service(self, service_name: str):
         """Restart a service"""
-        self.combined_logs.append(f"[cyan]🔄 Restarting {self.services[service_name].display_name}...[/cyan]")
+        console.print(f"[cyan]🔄 Restarting {self.services[service_name].display_name}...[/cyan]")
         await self.stop_service(service_name)
         await asyncio.sleep(2)
         await self.start_service(service_name)
     
     async def start_all_services(self):
         """Start all services in order with proper delays"""
-        self.combined_logs.append("[cyan]🚀 Starting all services...[/cyan]")
+        console.print("[cyan]🚀 Starting all services...[/cyan]")
         for service_name in ["mixtral", "phi", "tova"]:
             await self.start_service(service_name)
             await asyncio.sleep(3)  # Give each service time to start
     
     async def stop_all_services(self):
         """Stop all services in reverse order"""
-        self.combined_logs.append("[cyan]🛑 Stopping all services...[/cyan]")
+        console.print("[cyan]🛑 Stopping all services...[/cyan]")
         for service_name in ["tova", "phi", "mixtral"]:
             await self.stop_service(service_name)
             await asyncio.sleep(2)
     
-    def render_header(self) -> Panel:
-        """Render the header"""
-        grid = Table.grid(expand=True)
-        grid.add_column(justify="center", ratio=1)
-        grid.add_row(
-            "[bold magenta]🎪 TOVA v4 Control Center[/bold magenta]"
-        )
-        grid.add_row(
-            f"[dim]{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/dim]"
-        )
-        return Panel(grid, style="cyan", box=box.DOUBLE)
-    
-    def render_services(self) -> Panel:
-        """Render services panel"""
-        table = Table(box=box.ROUNDED, expand=True, show_header=True)
-        table.add_column("", style="dim", width=3)
+    def render_status_table(self) -> Table:
+        """Render services status table"""
+        table = Table(box=box.ROUNDED, expand=True, show_header=True, title="[bold]TOVA v4 Service Status[/bold]")
+        table.add_column("#", style="dim", width=3)
         table.add_column("Service", style="cyan", no_wrap=True)
         table.add_column("Status", justify="center")
         table.add_column("Port", justify="center")
         table.add_column("PID", justify="center")
         
-        for idx, (name, service) in enumerate(self.services.items()):
-            # Highlight selected service
-            prefix = "→ " if idx == self.selected_service else "  "
-            style = "bold yellow" if idx == self.selected_service else ""
-            
-            # Get PID for display
-            pid_display = str(service.pid) if service.pid else "-"
-            
+        for idx, (name, service) in enumerate(self.services.items(), 1):
             table.add_row(
-                prefix,
-                Text(service.display_name, style=style),
+                str(idx),
+                service.display_name,
                 service.status.value,
                 str(service.port),
-                pid_display
+                str(service.pid) if service.pid else "-"
             )
         
-        return Panel(table, title="[bold]Service Management[/bold]", 
-                    border_style="green", box=box.ROUNDED)
+        return table
     
-    def render_logs(self) -> Panel:
-        """Render combined logs panel with better formatting"""
-        # Get last N log lines and filter noise
-        log_lines = list(self.combined_logs)[-self.log_tail_lines:]
+    def render_recent_logs(self) -> Panel:
+        """Render recent logs"""
+        log_lines = list(self.combined_logs)[-10:]  # Last 10 log entries
         
         if not log_lines:
-            log_lines = ["[dim]Waiting for logs...[/dim]"]
-        
-        # Filter out excessive noise and format timestamps
-        filtered_lines = []
-        for line in log_lines:
-            # Skip very verbose lines
-            if any(noise in line.lower() for noise in ["debug", "trace", "verbose"]):
-                continue
-            filtered_lines.append(line)
-        
-        log_content = "\n".join(filtered_lines[-20:])  # Show last 20 filtered lines
+            log_content = "[dim]Waiting for logs...[/dim]"
+        else:
+            log_content = "\n".join(log_lines)
         
         return Panel(
             log_content,
-            title="[bold]Live Combined Logs[/bold] [dim](all services)[/dim]",
+            title="[bold]Recent Logs[/bold]",
             border_style="blue",
-            box=box.ROUNDED,
-            padding=(0, 1)
+            box=box.ROUNDED
         )
     
-    def render_footer(self) -> Panel:
-        """Render footer with controls"""
-        selected_service = self.services[self.service_list[self.selected_service]]
+    def show_main_menu(self):
+        """Show the main menu"""
+        console.print("\n[bold magenta]🎪 TOVA v4 Control Center[/bold magenta]")
+        console.print(f"[dim]{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/dim]\n")
         
-        controls = Table.grid(expand=True)
-        controls.add_column(ratio=1)
-        controls.add_row(
-            f"[bold cyan]Selected:[/bold cyan] {selected_service.display_name} | "
-            f"[bold]Status:[/bold] {selected_service.status.value}"
-        )
-        controls.add_row("")
-        controls.add_row(
-            "[yellow]Controls:[/yellow] "
-            "[green]S[/green]:Start  [red]X[/red]:Stop  [cyan]R[/cyan]:Restart  "
-            "[green]A[/green]:Start All  [red]K[/red]:Stop All  [magenta]Q[/magenta]:Quit"
-        )
-        controls.add_row(
-            "[dim]Navigation: J/K to select service[/dim]"
-        )
-        
-        return Panel(controls, style="dim", box=box.HEAVY)
-    
-    def render(self) -> Layout:
-        """Render the complete UI"""
+        # Update service statuses
         self.update_service_statuses()
         
-        self.layout["header"].update(self.render_header())
-        self.layout["services"].update(self.render_services())
-        self.layout["logs"].update(self.render_logs())
-        self.layout["footer"].update(self.render_footer())
+        # Show status table
+        console.print(self.render_status_table())
+        console.print()
         
-        return self.layout
+        # Show recent logs
+        console.print(self.render_recent_logs())
+        console.print()
+        
+        # Show menu options
+        console.print("[yellow]Menu Options:[/yellow]")
+        console.print("  1-3: Select service by number")
+        console.print("  s:   Start selected service")
+        console.print("  x:   Stop selected service")
+        console.print("  r:   Restart selected service")
+        console.print("  a:   Start all services")
+        console.print("  k:   Stop all services")
+        console.print("  l:   Show recent logs")
+        console.print("  q:   Quit")
+        console.print()
     
-    def input_thread(self):
-        """Handle input in a separate thread without any terminal mode changes"""
+    def run(self):
+        """Main menu loop"""
+        selected_service = None
+        
         while self.running:
             try:
-                # Use simple input() - this is the safest approach
-                # Arrow keys won't work, but J/K navigation will
-                cmd = input()
-                if cmd.strip():
-                    self.command_queue.put(cmd.strip().lower())
-            except (EOFError, KeyboardInterrupt):
-                self.running = False
-                break
-            except Exception:
-                # Ignore other input errors
-                pass
-    
-    async def process_commands(self):
-        """Process commands from the input queue"""
-        while self.running:
-            try:
-                # Check for commands without blocking
-                try:
-                    cmd = self.command_queue.get_nowait()
-                except queue.Empty:
-                    await asyncio.sleep(0.1)
-                    continue
+                # Clear screen and show menu
+                console.clear()
+                self.show_main_menu()
                 
-                # Process the command
+                if selected_service is not None:
+                    service_name = self.service_list[selected_service - 1]
+                    console.print(f"[bold cyan]Selected:[/bold cyan] {self.services[service_name].display_name}")
+                    console.print()
+                
+                # Get user input
+                console.print("[yellow]Enter command:[/yellow] ", end="")
+                cmd = input().strip().lower()
+                
                 if cmd == 'q':
                     self.running = False
-                elif cmd == 'k':  # vim-style up
-                    self.selected_service = max(0, self.selected_service - 1)
-                elif cmd == 'j':  # vim-style down
-                    self.selected_service = min(len(self.services) - 1, 
-                                               self.selected_service + 1)
-                elif cmd == 's':
-                    service_name = self.service_list[self.selected_service]
-                    await self.start_service(service_name)
-                elif cmd == 'x':
-                    service_name = self.service_list[self.selected_service]
-                    await self.stop_service(service_name)
-                elif cmd == 'r':
-                    service_name = self.service_list[self.selected_service]
-                    await self.restart_service(service_name)
+                elif cmd in ['1', '2', '3']:
+                    selected_service = int(cmd)
+                    console.print(f"[green]Selected service {selected_service}[/green]")
+                elif cmd == 's' and selected_service is not None:
+                    service_name = self.service_list[selected_service - 1]
+                    asyncio.run(self.start_service(service_name))
+                elif cmd == 'x' and selected_service is not None:
+                    service_name = self.service_list[selected_service - 1]
+                    asyncio.run(self.stop_service(service_name))
+                elif cmd == 'r' and selected_service is not None:
+                    service_name = self.service_list[selected_service - 1]
+                    asyncio.run(self.restart_service(service_name))
                 elif cmd == 'a':
-                    await self.start_all_services()
-                elif cmd == 'kk':  # Double 'k' for kill all
-                    await self.stop_all_services()
-                
-            except Exception as e:
-                self.combined_logs.append(f"[red]Command error: {e}[/red]")
-    
-    async def run(self):
-        """Main TUI loop with clean input handling"""
-        # Start input thread
-        input_thread = threading.Thread(target=self.input_thread, daemon=True)
-        input_thread.start()
-        
-        # Start command processor
-        command_task = asyncio.create_task(self.process_commands())
-        
-        with Live(self.render(), refresh_per_second=1, console=console, screen=True) as live:
-            try:
-                while self.running:
-                    live.update(self.render())
-                    await asyncio.sleep(1)  # Slower refresh to reduce flicker
+                    asyncio.run(self.start_all_services())
+                elif cmd == 'k':
+                    asyncio.run(self.stop_all_services())
+                elif cmd == 'l':
+                    # Show more detailed logs
+                    console.print("\n[bold]Recent Logs:[/bold]")
+                    for log in list(self.combined_logs)[-20:]:
+                        console.print(log)
+                    input("\nPress Enter to continue...")
+                elif cmd:
+                    console.print(f"[red]Unknown command: {cmd}[/red]")
+                    input("Press Enter to continue...")
+                    
             except KeyboardInterrupt:
                 self.running = False
-        
-        # Clean up
-        command_task.cancel()
-        try:
-            await command_task
-        except asyncio.CancelledError:
-            pass
-        
-        # Stop log monitoring
-        for service in self.services.values():
-            if service.log_process:
-                service.log_process.terminate()
+            except Exception as e:
+                console.print(f"[red]Error: {e}[/red]")
+                input("Press Enter to continue...")
 
 async def main():
     """Main entry point"""
-    tui = TovaTUI()
+    tui = TovaTUIMenu()
     
     try:
-        await tui.run()
+        tui.run()
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]")
     finally:
         console.print("\n[yellow]✨ TOVA TUI shutdown complete[/yellow]")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main()) 
