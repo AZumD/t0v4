@@ -42,6 +42,10 @@ ENV/
 /data/**
 !data/.gitkeep
 
+# LLM Models
+/tova_v4/data/models/**
+!tova_v4/data/models/.gitkeep
+
 # Logs
 *.log
 
