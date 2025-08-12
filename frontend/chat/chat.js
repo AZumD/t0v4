@@ -274,15 +274,31 @@ class TovaInterface {
             return;
         }
 
+        // Perf init per message
+        if (!this._perf) {
+            this._perf = { t0: 0, tFirst: 0, chars: 0 };
+        }
+
         // Handle different message types from TOVA v4
         switch (data.type) {
             case 'typing':
                 console.log('🔍 Typing indicator:', data.status);
+                // init per request
+                this._perf.t0 = performance.now();
+                this._perf.tFirst = 0;
+                this._perf.chars = 0;
+                console.info('[TOVA] ▶ request sent');
                 // Don't start avatar here - wait for first chunk
                 break;
                 
             case 'response_chunk':
                 console.log('🔍 Response chunk:', data.content);
+                // First token timing
+                if (!this._perf.tFirst) {
+                    this._perf.tFirst = performance.now();
+                    console.info(`[TOVA] ⏱ first token: ${(this._perf.tFirst - this._perf.t0).toFixed(1)} ms`);
+                }
+                if (data.content) this._perf.chars += data.content.length;
                 // Start avatar on first chunk if not already playing
                 if (!this.streamingMessage) {
                     avatarManager.playDuringResponse();
@@ -294,6 +310,14 @@ class TovaInterface {
                 console.log('🔍 Response complete:', data.full_response);
                 this.finalizeTovaMessage(data.full_response, data.metadata);
                 avatarManager.stopAfterResponse();
+                // Perf summary
+                {
+                    const done = performance.now();
+                    const elapsed = ((this._perf.tFirst || done) - (this._perf.tFirst || this._perf.t0)) / 1000;
+                    const toks = Math.max(1, Math.round(this._perf.chars / 4));
+                    const tps = (toks / Math.max(elapsed, 0.001)).toFixed(2);
+                    console.info(`[TOVA] ✅ stream complete | est tokens=${toks} | elapsed=${elapsed.toFixed(2)}s | ~${tps} t/s`);
+                }
                 break;
                 
             default:

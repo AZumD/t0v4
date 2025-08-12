@@ -6,4 +6,8 @@
 - Available endpoints (older llama.cpp commit 799a1cb1):
   - `POST /completion` — text generation
   - `GET /v1/models` — liveness/info (used for health checks)
-  - `/health` — not available 
+  - `/health` — not available
+- Environment knobs:
+  - `MIXTRAL_THREADS`, `MIXTRAL_BATCH`, `MIXTRAL_NGL` for server start defaults.
+  - `MIXTRAL_STOP_TOKENS` for client stop token CSV override (default `["<|im_end|>", "</s>"]`).
+  - `MIXTRAL_STREAM_LOG=1` to enable light streaming metrics in backend logs. 

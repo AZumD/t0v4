@@ -11,6 +11,7 @@ The TOVA v4 frontend provides a modern, responsive chat interface that connects 
 - **Avatar integration**: Video avatar that responds during conversations
 - **Context monitoring**: Visual indicators for context usage and system status
 - **Debug panel**: Comprehensive system information and monitoring
+- **Console perf logs**: First-token latency and estimated tokens/sec are printed in the browser console
 
 ### 🧠 Dual-Brain Status
 - **Mixtral status**: Primary brain (conversation handling)
@@ -63,6 +64,7 @@ frontend/
 - **Context monitoring**: Visual context usage tracking
 - **Avatar management**: Video playback coordination
 - **Debug panel**: System information display
+- **Console performance metrics**: First token latency and estimated tokens/sec via `console.info`
 
 ### Backend Integration
 
@@ -105,6 +107,7 @@ prompt: |
 - **Debug panel**: Click the 💭 bubble in the avatar container
 - **Context monitoring**: Watch for color changes in the avatar border
 - **System status**: Monitor the status block for real-time information
+- **Browser console**: Observe `[TOVA]` logs for first-token timing and estimated tokens/sec
 
 ### Mobile Support
 - **Responsive design**: Automatically adapts to mobile screens
@@ -154,7 +157,7 @@ python test/test_frontend.py
 4. **Performance problems**: Check system resources and network connectivity
 
 ### Debug Information
-- **Browser console**: Check for JavaScript errors
+- **Browser console**: Check for JavaScript errors and performance logs
 - **Network tab**: Monitor WebSocket connections
 - **Debug panel**: View real-time system status
 - **Logs**: Check backend logs for errors

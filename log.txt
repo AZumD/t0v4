@@ -1,0 +1,8 @@
+[2025-08-12] Baclaude enabled CUDA offload and hardened streaming.
+- Edited `scripts/start/start_mixtral.sh`: defaults THREADS=$(nproc), BATCH=64, NGL=24; removed --no-mmap; added NGL downshift retry to ~14; keeps --ctx-size 4096.
+- Updated `tova/brains/mixtral_client.py`: env stop tokens (`MIXTRAL_STOP_TOKENS`), robust SSE parsing (strip `data:`, blank lines as keep-alive, JSON substring fallback), respect `{stop|done:true}`, immediate chunk yields, optional metrics via `MIXTRAL_STREAM_LOG=1`.
+- Frontend `frontend/chat/chat.js`: added console perf prints (first token ms, est tokens/sec).
+- Docs updated: `docs/README/START_MIXTRAL.md`, `docs/README/OVERVIEW.md`, `docs/README/FRONTEND.md`, `docs/README/MAIN.md`.
+- Tests added: `tests/test_streaming_stop_tokens.py` (SSE/stop/malformed cases). Existing streaming tests still pass.
+- Defaults used: NGL=24, THREADS=$(nproc), BATCH=64.
+- Local run baseline (pre-GPU) ~0.3 t/s; post-offload expected several t/s. First-token time now visible in browser console and backend logs. 
