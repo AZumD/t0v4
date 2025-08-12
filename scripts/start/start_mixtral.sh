@@ -3,33 +3,32 @@ set -e
 
 LLAMA_CPP_PATH="/home/anthon/llama.cpp"
 LLAMA_SERVER_PATH="/home/anthon/llama.cpp/build/bin/server"
-# Prefer external model locations; allow override via MIXTRAL_MODEL_PATH
+# Prefer explicit model path; fallback to curated external default only
 LOCAL_MODEL_PATH=""
 DEFAULT_MODEL_NAME="dolphin-2.7-mixtral-8x7b.Q4_K_M.gguf"
 EXTERNAL_DEFAULT="/home/anthon/llm/models/mixtral/${DEFAULT_MODEL_NAME}"
-CACHE_GLOB="/home/anthon/.cache/llama.cpp/*${DEFAULT_MODEL_NAME}"
 LOG_PATH="/home/anthon/t0v4/tova_v4/data/logs"
 
 mkdir -p "$LOG_PATH"
 cd "$LLAMA_CPP_PATH"
 
-# Resolve model path
+# Resolve model path (no cache fallback to avoid wrong vendor files)
 if [ -n "${MIXTRAL_MODEL_PATH:-}" ] && [ -f "$MIXTRAL_MODEL_PATH" ]; then
   LOCAL_MODEL_PATH="$MIXTRAL_MODEL_PATH"
 elif [ -f "$EXTERNAL_DEFAULT" ]; then
   LOCAL_MODEL_PATH="$EXTERNAL_DEFAULT"
-else
-  # Try cache fallback
-  FALLBACK_PATH=$(ls -1 $CACHE_GLOB 2>/dev/null | head -n1 || true)
-  if [ -n "$FALLBACK_PATH" ] && [ -f "$FALLBACK_PATH" ]; then
-    LOCAL_MODEL_PATH="$FALLBACK_PATH"
-  fi
+fi
+
+# Guard: avoid known bad vendor cache paths
+if [[ "$LOCAL_MODEL_PATH" == *"/.cache/llama.cpp/TheBloke_"* ]]; then
+  echo "❌ Refusing to use TheBloke cache model: $LOCAL_MODEL_PATH"
+  echo "   Set MIXTRAL_MODEL_PATH to your curated model path."
+  exit 1
 fi
 
 if [ -z "$LOCAL_MODEL_PATH" ] || [ ! -f "$LOCAL_MODEL_PATH" ]; then
-  echo "❌ Mixtral model not found. Set MIXTRAL_MODEL_PATH or place model at:"
+  echo "❌ Mixtral model not found. Set MIXTRAL_MODEL_PATH to the correct .gguf or place it at:"
   echo "   $EXTERNAL_DEFAULT"
-  echo "   or ensure cache contains: $CACHE_GLOB"
   exit 1
 fi
 
