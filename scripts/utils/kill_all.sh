@@ -12,11 +12,12 @@ if [ -x "$SCRIPT_DIR/stop_all.sh" ]; then
 fi
 
 # 2) Extra safety: kill by process signature (non-fatal if not found)
-# Mixtral (llama.cpp server on 8000)
-pkill -f "/home/anthon/llama.cpp/build/bin/server.*--port 8000" 2>/dev/null || true
+# Mixtral / llama.cpp server binary (any port)
+pkill -f "/home/anthon/llama.cpp/.*/bin/server" 2>/dev/null || true
+pkill -f "/home/anthon/llama.cpp/build/bin/server" 2>/dev/null || true
 
-# Phi (llama-server on 8001)
-pkill -f "llama-server.*--port 8001" 2>/dev/null || true
+# Any llama-server instances (Phi or others)
+pkill -f "\bllama-server\b" 2>/dev/null || true
 
 # TOVA core (uvicorn fastapi)
 pkill -f "uvicorn.*tova.main:app" 2>/dev/null || true
